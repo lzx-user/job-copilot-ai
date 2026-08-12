@@ -1,0 +1,36 @@
+.el-button {
+  min-height: 40px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner {
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--border-color) inset;
+}
+
+.el-input__wrapper,
+.el-select__wrapper {
+  min-height: 42px;
+}
+
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused,
+.el-textarea__inner:focus {
+  box-shadow: 0 0 0 1px var(--color-primary) inset !important;
+}
+
+.el-message {
+  border-radius: 12px;
+}
+
+.el-drawer {
+  background: #fff;
+}
+
+.mobile-nav-drawer .el-drawer__body {
+  padding: 0;
+}
+

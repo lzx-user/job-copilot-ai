@@ -1,0 +1,106 @@
+body {
+  min-width: 320px;
+  overflow-x: hidden;
+  color: var(--text-primary);
+  background:
+    radial-gradient(circle at 55% -15%, rgba(100, 118, 246, 0.12), transparent 30%),
+    var(--background-page);
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page-shell {
+  width: min(100%, var(--content-max-width));
+  margin: 0 auto;
+  padding: 28px 30px 44px;
+}
+
+.page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.page-heading h1 {
+  margin-bottom: 6px;
+  font-size: clamp(26px, 2vw, 34px);
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.page-heading p {
+  margin-bottom: 0;
+  color: var(--text-secondary);
+}
+
+.panel {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow-card);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.section-label {
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gradient-button.el-button {
+  border: 0;
+  color: #fff;
+  background: linear-gradient(120deg, var(--color-primary), var(--color-secondary));
+  box-shadow: 0 9px 22px rgba(65, 105, 246, 0.22);
+}
+
+.gradient-button.el-button:hover,
+.gradient-button.el-button:focus {
+  color: #fff;
+  background: linear-gradient(120deg, var(--color-primary-hover), #6d3df1);
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 12%, transparent);
+}
+
+@media (max-width: 767px) {
+  .page-shell {
+    padding: 20px 16px 32px;
+  }
+
+  .page-heading {
+    align-items: stretch;
+    flex-direction: column;
+    margin-bottom: 18px;
+  }
+}
+

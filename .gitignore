@@ -1,0 +1,24 @@
+# 依赖与构建产物
+node_modules/
+dist/
+
+# 本地环境变量（示例文件必须保留）
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# 日志与测试缓存
+*.log
+npm-debug.log*
+coverage/
+.npm-cache/
+output/playwright/
+
+# 编辑器与系统临时文件
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
