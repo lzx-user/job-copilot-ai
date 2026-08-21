@@ -1,20 +1,17 @@
 <script setup lang="ts">
 import { InfoFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, reactive, watch } from 'vue'
+import type { SelectInstance } from 'element-plus'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useAuthStore } from '../../stores/auth.store'
 import { useProfileStore } from '../../stores/profile.store'
 import type { CandidateProfile } from '../../types/profile'
 
 const authStore = useAuthStore()
+const skillSelectRef = ref<SelectInstance>()
 const email = computed(() => authStore.user?.email || '尚未获取邮箱')
 const avatarLetter = computed(() => email.value.slice(0, 1).toUpperCase())
 const profileStore = useProfileStore()
-
-// 页面首次挂载时读取数据库，刷新页面后也会重新执行
-onMounted(() => {
-  void profileStore.fetchProfile()
-})
 
 const profileForm = reactive<CandidateProfile>({
   nickname: '',
@@ -43,14 +40,142 @@ watch(
   { immediate: true },
 )
 
+// 页面首次挂载时读取数据库，刷新页面后也会重新执行
+onMounted(() => {
+  void profileStore.fetchProfile()
+})
+
+function normalizeStringList(values: string[]): string[] {
+  const normalizedValues = values
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+
+  // Set 删除重复内容，Array.from 再把它转换回字符串数组。
+  return Array.from(new Set(normalizedValues))
+}
+
+function normalizeProfile(profile: CandidateProfile): CandidateProfile {
+  return {
+    nickname: profile.nickname.trim(),
+    targetRoles: normalizeStringList(profile.targetRoles),
+    expectedCities: normalizeStringList(profile.expectedCities),
+    skills: normalizeStringList(profile.skills),
+    projectSummary: profile.projectSummary.trim(),
+    strengths: profile.strengths.trim(),
+    availability: profile.availability.trim(),
+    graduationYear: profile.graduationYear.trim(),
+  }
+}
+
+function validateProfile(profile: CandidateProfile): string | null {
+  const normalizedProfile = normalizeProfile(profile)
+  if (!normalizedProfile.targetRoles.length) return '请至少填写一个目标岗位'
+  if (!normalizedProfile.skills.length) return '请至少填写一个技能'
+  if (normalizedProfile.skills.length > 30) return '技能数量不能超过 30 个'
+  if (!normalizedProfile.projectSummary) return '请填写项目经历摘要'
+  if (normalizedProfile.projectSummary.length > 5000) {
+    return '项目经历摘要不能超过 5000 字'
+  }
+  return null
+}
+
+interface CompletenessStatusItem {
+  key: string
+  label: string
+  completed: boolean
+}
+
+const completenessStatusItems = computed<CompletenessStatusItem[]>(() => {
+  const profile = normalizeProfile(profileForm)
+
+  const basicCompleted =
+    Boolean(profile.nickname) &&
+    profile.targetRoles.length > 0 &&
+    profile.expectedCities.length > 0 &&
+    Boolean(profile.availability)
+
+  const skillsCompleted = profile.skills.length >= 5
+  const projectCompleted = profile.projectSummary.length >= 100
+  const strengthsCompleted = profile.strengths.length >= 50
+
+  return [
+    {
+      key: 'basic',
+      label: basicCompleted ? '基础信息已完善' : '基础信息待完善',
+      completed: basicCompleted,
+    },
+    {
+      key: 'skills',
+      label: skillsCompleted ? '技术栈已完善' : '技术栈待补充',
+      completed: skillsCompleted,
+    },
+    {
+      key: 'project',
+      label: projectCompleted ? '项目经历已完善' : '项目经历待填写',
+      completed: projectCompleted,
+    },
+    {
+      key: 'strengths',
+      label: strengthsCompleted ? '个人优势已完善' : '个人优势待填写',
+      completed: strengthsCompleted,
+    },
+  ]
+})
+
+function calculateCompleteness(profile: CandidateProfile): number {
+  let score = 0
+  const normalizedProfile = normalizeProfile(profile)
+  if (normalizedProfile.nickname.length > 0) score += 10
+  if (normalizedProfile.targetRoles.length > 0) score += 15
+  if (normalizedProfile.expectedCities.length > 0) score += 10
+  if (normalizedProfile.skills.length >= 5) score += 20
+  if (normalizedProfile.projectSummary.length >= 100) score += 25
+  if (normalizedProfile.strengths.length >= 50) score += 10
+  if (normalizedProfile.availability.length > 0) score += 10
+  return score
+}
+
+const completeness = computed(() => {
+  return calculateCompleteness(profileForm)
+})
+
+const completenessLabel = computed(() => {
+  if (completeness.value === 100) return '已完善'
+  if (completeness.value === 0) return '待完善'
+  return '完善中'
+})
+
+function handleSkillKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Enter' || event.isComposing) return
+
+  const select = skillSelectRef.value
+  const keyword = select?.states.inputValue.trim()
+  if (!select || !keyword) return
+
+  const alreadyExists = profileForm.skills.some(
+    (skill) => skill.trim().toLocaleLowerCase() === keyword.toLocaleLowerCase(),
+  )
+
+  if (!alreadyExists) return
+
+  // 必须在捕获阶段阻止事件，否则 Element Plus 会把已选技能切换为未选中。
+  event.preventDefault()
+  event.stopPropagation()
+
+  select.states.inputValue = ''
+  select.blur()
+  ElMessage.info('这个技能已经添加了')
+}
+
 async function handleSave() {
-  const result = await profileStore.saveProfile({
-    ...profileForm,
-    // 向 Store 传入数组副本，避免数据库操作持有页面的响应式数组。
-    targetRoles: [...profileForm.targetRoles],
-    expectedCities: [...profileForm.expectedCities],
-    skills: [...profileForm.skills],
-  })
+  const normalizedProfile = normalizeProfile(profileForm)
+  const validationError = validateProfile(normalizedProfile)
+  if (validationError) {
+    ElMessage.warning(validationError)
+    return
+  }
+
+  const result = await profileStore.saveProfile(normalizedProfile)
 
   if (result === 'ignored') {
     // 重复提交或认证身份已变化时静默忽略，不向当前用户显示旧请求提示
@@ -108,7 +233,10 @@ async function handleSave() {
             </p>
             <small>{{ email }}</small>
           </div>
-          <div class="mini-ring"><strong>0%</strong><span>已完善</span></div>
+          <div class="mini-ring">
+            <strong>{{ completeness }}%</strong
+            ><span>{{ completenessLabel }}</span>
+          </div>
         </section>
 
         <section v-loading="profileStore.loading" class="panel section-card">
@@ -181,6 +309,7 @@ async function handleSave() {
           </div>
 
           <el-select
+            ref="skillSelectRef"
             v-model="profileForm.skills"
             class="profile-tags-select"
             multiple
@@ -190,6 +319,7 @@ async function handleSave() {
             :multiple-limit="30"
             :disabled="profileStore.loading || profileStore.saving"
             placeholder="输入技能后按回车添加，例如 Vue 3、TypeScript、Go"
+            @keydown.capture="handleSkillKeydown"
           />
         </section>
 
@@ -202,7 +332,7 @@ async function handleSave() {
             v-model="profileForm.projectSummary"
             type="textarea"
             :rows="6"
-            maxlength="1500"
+            maxlength="5000"
             show-word-limit
             :disabled="profileStore.loading || profileStore.saving"
             placeholder="介绍项目背景、你的职责、关键难点、解决方案和可验证结果"
@@ -242,13 +372,20 @@ async function handleSave() {
         <section class="panel completeness-card">
           <h2 class="panel-title">档案完整度</h2>
           <div class="large-ring">
-            <div><strong>0%</strong><span>待完善</span></div>
+            <div>
+              <strong>{{ completeness }}%</strong
+              ><span>{{ completenessLabel }}</span>
+            </div>
           </div>
           <ul>
-            <li><i />基础信息待填写</li>
-            <li><i />技术栈待补充</li>
-            <li><i />项目经历待填写</li>
-            <li><i />个人优势待填写</li>
+            <li
+              v-for="item in completenessStatusItems"
+              :key="item.key"
+              :class="{ completed: item.completed }"
+            >
+              <i />
+              {{ item.label }}
+            </li>
           </ul>
         </section>
         <section class="panel advice-card">
@@ -371,43 +508,6 @@ async function handleSave() {
 .section-card {
   padding: 22px;
 }
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-.info-grid > div {
-  display: grid;
-  min-width: 0;
-  padding: 12px 14px;
-  gap: 4px;
-  border-radius: 10px;
-  background: #f8f9fd;
-}
-.info-grid span {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-.info-grid strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.empty-inline {
-  display: flex;
-  min-height: 70px;
-  padding: 18px;
-  align-items: center;
-  gap: 12px;
-  border: 1px dashed #d8dfef;
-  border-radius: 12px;
-  color: var(--text-secondary);
-  background: #fbfcff;
-}
-.text-section p {
-  margin: 0;
-  color: var(--text-secondary);
-}
 .profile-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -417,6 +517,14 @@ async function handleSave() {
   display: grid;
   padding: 22px;
   place-items: center;
+}
+.completeness-card li.completed {
+  color: var(--color-success);
+}
+
+.completeness-card li.completed i {
+  border-color: var(--color-success);
+  background: var(--color-success);
 }
 .completeness-card h2 {
   justify-self: start;
@@ -510,9 +618,6 @@ async function handleSave() {
   }
   .mini-ring {
     margin-left: 0;
-  }
-  .info-grid {
-    grid-template-columns: 1fr;
   }
   .profile-aside {
     grid-template-columns: 1fr;
