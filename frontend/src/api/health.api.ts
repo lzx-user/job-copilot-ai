@@ -1,8 +1,7 @@
-import type { HealthResponse } from '../types/api'
+import type { ApiResponse, HealthData } from '../types/api'
 import { request } from './request'
 
 export async function getHealthStatus() {
-  const response = await request.get<HealthResponse>('/health')
-  return response.data
+  const response = await request.get<ApiResponse<HealthData>>('/health')
+  return response.data.data
 }
-
