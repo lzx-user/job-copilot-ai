@@ -1,4 +1,4 @@
-module job-copilot-server
+module job-copilot-backend
 
 go 1.26.4
 

@@ -3,8 +3,8 @@ package main
 import (
 	"log"
 
-	httpadapter "job-copilot-server/internal/adapter/http"
-	"job-copilot-server/internal/config"
+	httpadapter "job-copilot-backend/internal/adapter/http"
+	"job-copilot-backend/internal/config"
 )
 
 func main() {

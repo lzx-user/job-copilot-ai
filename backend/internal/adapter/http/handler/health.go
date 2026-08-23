@@ -3,7 +3,7 @@ package handler
 import (
 	"github.com/gin-gonic/gin"
 
-	"job-copilot-server/pkg/response"
+	"job-copilot-backend/pkg/response"
 )
 
 func Health(ctx *gin.Context) {

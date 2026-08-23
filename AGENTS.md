@@ -6,7 +6,7 @@
 - 当前目标：先完成真实可运行、可部署、可用于秋招展示的 V1，再做工程化和视觉优化；
 - 需求和阶段范围以 `求职陪跑_AI助手_秋招冲刺版_任务规划_精简版_2026-08-12.md` 为准。
 
-# 当前真实进度（2026-08-12）
+# 当前真实进度（2026-08-23）
 
 已经完成：
 
@@ -15,14 +15,14 @@
 - AppLayout、响应式侧栏、顶栏、移动端抽屉、设计变量和空状态；
 - Supabase Client、邮箱注册/登录/退出代码、Session 初始化、刷新保持监听和路由守卫；
 - Axios 请求实例；
-- 旧 Express + TypeScript 后端骨架、CORS、限流、错误处理以及 `/health`、`/api/v1/health`；
+- Go + Gin 后端基础服务、Config、统一响应、CORS、错误响应以及 `/health`、`/api/v1/health`；
+- 前端健康检查 API 地址和 TypeScript Contract 已切换到 Go 后端；
 - 缺少 Supabase 配置时的友好提示。
 
 尚未完成或尚未真实联调：
 
 - Supabase 项目配置以及真实注册、登录、刷新恢复、退出的完整联调；
 - `profiles` 表、RLS 和个人档案的保存/读取/修改闭环；
-- Go + Gin 后端；
 - JD 分析、AI 结构化输出和 `jd_analyses` 持久化；
 - `interview_sessions`、`interview_messages`、5 轮模拟面试和最终报告；
 - History、Dashboard 真实统计、部署和完整端到端验收。
@@ -31,7 +31,7 @@
 
 没有真实凭据、真实数据或没有执行联调时，不得声称相关功能已经可用。
 
-# 技术栈与迁移方向
+# 技术栈与后端现状
 
 ## 前端
 
@@ -44,7 +44,7 @@
 - Axios；
 - Supabase JavaScript Client。
 
-## 目标后端
+## 后端
 
 - Go；
 - Gin；
@@ -52,16 +52,12 @@
 - PostgreSQL / Supabase Database；
 - LLM API（OpenAI 兼容接口）。
 
-仓库中的 `backend/` 当前仍是 Node.js + Express + TypeScript 的早期骨架，只实现健康检查。
+仓库中的 `backend/` 当前是 Go + Gin 后端，基础健康检查迁移已经完成。旧 Express + TypeScript 骨架已退出工作区，不再承接或维护业务逻辑。
 
-它属于待迁移的历史实现，不是后续业务后端的目标技术栈。
+## 后端演进规则
 
-## 迁移规则
-
-- 新增 JD 分析、模拟面试、报告等业务 API 时，使用 Go + Gin，不继续扩展 Express 业务能力；
-- Go 后端先实现与现有健康检查等价的最小可运行服务，再逐步承接业务接口；
-- 在 Go 健康检查和前端 API 地址切换完成前，不直接删除旧 `backend/`；
-- 不让 Node 和 Go 同时维护同一份业务逻辑；
+- 新增 JD 分析、模拟面试、报告等业务 API 时，只使用 Go + Gin；
+- 不重新引入 Express 业务后端，不让 Node 和 Go 同时维护同一份业务逻辑；
 - 迁移步骤、目录命名、端口或环境变量发生变化时，同步更新 README、`.env.example` 和相关文档；
 - 未经当前任务明确要求，不提前一次性重写全部后端；
 - 不为了迁移而顺手修改与当前阶段无关的前端业务。
@@ -630,17 +626,6 @@ go test ./...
 ```bash
 go build ./...
 ```
-
-## 旧 Node 后端
-
-只有实际修改旧 `backend/` 时，才运行它对应的：
-
-```bash
-npm run typecheck
-npm run build
-```
-
-不要因为只修改 Go 或前端而无意义运行旧 Node 后端检查。
 
 ## 无法检查时
 

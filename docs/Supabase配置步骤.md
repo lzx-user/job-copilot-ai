@@ -35,7 +35,7 @@
 
 ```env
 VITE_APP_NAME=求职陪跑 AI 助手
-VITE_API_BASE_URL=http://localhost:3000/api/v1
+VITE_API_BASE_URL=http://localhost:8080/api/v1
 VITE_SUPABASE_URL=https://你的项目-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=你的-anon-public-key
 ```
@@ -54,8 +54,7 @@ service role key 能绕过 RLS，只能放在后端托管平台的环境变量�
 
 ```bash
 cd backend
-npm install
-npm run dev
+go run ./cmd/server
 ```
 
 终端 2：
@@ -95,9 +94,8 @@ npm run dev
 
 ### CORS 或后端无法连接
 
-确认后端正在 `3000` 端口运行，`backend/.env` 的 `FRONTEND_ORIGIN` 与浏览器地址完全一致，并检查登录页底部的后端服务状态。
+确认 Go 后端正在 `8080` 端口运行，`backend/.env` 的 `FRONTEND_ORIGIN` 与浏览器地址完全一致，并检查登录页底部的后端服务状态。
 
 ### 认证状态没有刷新
 
 停止 Vite 后重新启动，清除浏览器该站点的旧存储，再重新登录。不要用 localStorage 手工伪造 Session。
-

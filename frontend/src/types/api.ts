@@ -1,14 +1,13 @@
-export interface ApiErrorResponse {
+export interface ApiResponse<T> {
   code: string
-  message: string
-  data: null
+  message?: string
+  data: T
 }
 
-export interface HealthResponse {
+export interface HealthData {
   status: 'ok'
-  message: string
-  timestamp: string
 }
+
+export type ApiErrorResponse = ApiResponse<null>
 
 export type ServiceStatus = 'checking' | 'online' | 'offline'
-

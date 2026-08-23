@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"job-copilot-server/pkg/response"
+	"job-copilot-backend/pkg/response"
 )
 
 func NotFound(ctx *gin.Context) {
