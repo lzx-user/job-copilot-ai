@@ -1,4 +1,4 @@
-package domain
+package analysis
 
 // AnalysisResult 是当前架构阶段的最小分析结果，后续实现 JD 业务时再补充真实字段。
 type AnalysisResult struct {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"job-copilot-backend/internal/domain"
+	analysisdomain "job-copilot-backend/internal/domain/analysis"
 	"job-copilot-backend/internal/port"
 )
 
@@ -21,11 +21,11 @@ func NewPlaceholderAdapter() *PlaceholderAdapter {
 
 func (adapter *PlaceholderAdapter) AnalyzeJD(
 	ctx context.Context,
-	_ domain.JobDescription,
-) (domain.AnalysisResult, error) {
+	_ analysisdomain.JobDescription,
+) (analysisdomain.AnalysisResult, error) {
 	if err := ctx.Err(); err != nil {
-		return domain.AnalysisResult{}, err
+		return analysisdomain.AnalysisResult{}, err
 	}
 
-	return domain.AnalysisResult{}, ErrClientNotConfigured
+	return analysisdomain.AnalysisResult{}, ErrClientNotConfigured
 }
