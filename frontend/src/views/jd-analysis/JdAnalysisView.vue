@@ -1,26 +1,142 @@
 <script setup lang="ts">
-import { InfoFilled, MagicStick, Plus, Search } from '@element-plus/icons-vue'
+import { InfoFilled, MagicStick, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { reactive } from 'vue'
+import type { FormInstance, FormRules } from 'element-plus'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import AppEmpty from '../../components/common/AppEmpty.vue'
+import { useProfileStore } from '../../stores/profile.store'
 
 interface JdDraft {
   companyName: string
   jobTitle: string
   jdContent: string
   resumeSummary: string
+  skills: string[]
 }
 
-// reactive 适合把同一个表单的多个字段组织在一起；当前阶段只保存在页面内，不写数据库。
+interface MockSubmissionSummary {
+  companyName: string
+  jobTitle: string
+  jdLength: number
+  skillCount: number
+}
+
+const profileStore = useProfileStore()
+const formRef = ref<FormInstance>()
+const submitting = ref(false)
+const mockResult = ref<MockSubmissionSummary | null>(null)
+let hasAppliedProfile = false
+
 const form = reactive<JdDraft>({
   companyName: '',
   jobTitle: '',
   jdContent: '',
   resumeSummary: '',
+  skills: [],
 })
 
-function explainAvailability() {
-  ElMessage.info('JD AI 分析将在 7 月 19 日阶段接入，本页当前只提供输入骨架。')
+const rules: FormRules<JdDraft> = {
+  companyName: [
+    { required: true, message: '请填写公司名称', trigger: 'blur' },
+    { max: 100, message: '公司名称不能超过 100 字', trigger: 'blur' },
+  ],
+  jobTitle: [
+    { required: true, message: '请填写岗位名称', trigger: 'blur' },
+    { max: 100, message: '岗位名称不能超过 100 字', trigger: 'blur' },
+  ],
+  jdContent: [
+    { required: true, message: '请粘贴岗位 JD', trigger: 'blur' },
+    { min: 200, message: '岗位 JD 至少需要 200 字', trigger: 'blur' },
+    { max: 8000, message: '岗位 JD 不能超过 8000 字', trigger: 'blur' },
+  ],
+  resumeSummary: [
+    { required: true, message: '请填写或从档案带入个人经历摘要', trigger: 'blur' },
+    { max: 5000, message: '个人经历摘要不能超过 5000 字', trigger: 'blur' },
+  ],
+  skills: [
+    {
+      type: 'array',
+      required: true,
+      min: 1,
+      message: '请至少添加一个技能',
+      trigger: 'change',
+    },
+  ],
+}
+
+const profileStatus = computed(() => {
+  if (profileStore.loading) return '正在读取个人档案…'
+  if (profileStore.profileError) return '个人档案读取失败，可在本页手动填写'
+  if (profileStore.loaded) return '已从个人档案带入经历摘要与技能，可继续修改'
+  return '尚未读取个人档案'
+})
+
+function buildResumeSummary() {
+  return [profileStore.profile.projectSummary, profileStore.profile.strengths]
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+// 档案异步返回后只自动带入一次，避免覆盖用户随后在本页做的修改。
+function applyProfileToDraft() {
+  if (!profileStore.loaded || hasAppliedProfile) return
+
+  form.resumeSummary = buildResumeSummary()
+  form.skills = [...profileStore.profile.skills]
+  hasAppliedProfile = true
+}
+
+watch(
+  () => profileStore.loaded,
+  () => applyProfileToDraft(),
+  { immediate: true },
+)
+
+onMounted(async () => {
+  if (!profileStore.loaded) await profileStore.fetchProfile()
+  applyProfileToDraft()
+})
+
+function normalizeSkills(values: string[]) {
+  const uniqueSkills = new Map<string, string>()
+  values.forEach((value) => {
+    const skill = value.trim()
+    if (skill) uniqueSkills.set(skill.toLocaleLowerCase(), skill)
+  })
+  return Array.from(uniqueSkills.values())
+}
+
+async function handleMockAnalyze() {
+  if (submitting.value) return
+
+  form.companyName = form.companyName.trim()
+  form.jobTitle = form.jobTitle.trim()
+  form.jdContent = form.jdContent.trim()
+  form.resumeSummary = form.resumeSummary.trim()
+  form.skills = normalizeSkills(form.skills)
+
+  try {
+    await formRef.value?.validate()
+  } catch {
+    ElMessage.warning('请先完善标红的岗位与个人信息')
+    return
+  }
+
+  submitting.value = true
+  mockResult.value = null
+
+  // 8.20 仅模拟一次提交等待，真实 Go API 与 AI 结果在后续阶段接入。
+  window.setTimeout(() => {
+    mockResult.value = {
+      companyName: form.companyName,
+      jobTitle: form.jobTitle,
+      jdLength: form.jdContent.length,
+      skillCount: form.skills.length,
+    }
+    submitting.value = false
+    ElMessage.success('Mock 提交验证通过')
+  }, 600)
 }
 </script>
 
@@ -32,51 +148,124 @@ function explainAvailability() {
         <h1>JD 智能匹配分析</h1>
         <p>整理岗位信息与个人经历，为后续 AI 匹配分析做好准备。</p>
       </div>
-      <el-tag effect="plain" round>静态骨架 · 后续阶段开放</el-tag>
+      <el-tag effect="plain" round>8.20 · Mock 输入验证</el-tag>
     </div>
+
+    <el-alert
+      class="stage-alert"
+      title="当前只验证输入与交互，不会调用 AI，也不会保存内容"
+      type="info"
+      :closable="false"
+      show-icon
+    />
 
     <div class="analysis-layout">
       <section class="panel form-panel">
-        <div class="panel-header"><h2 class="panel-title">岗位信息</h2><span class="draft-badge">草稿未保存</span></div>
-        <el-form :model="form" label-position="top">
+        <div class="panel-header">
+          <h2 class="panel-title">岗位信息</h2>
+          <span class="draft-badge">草稿未保存</span>
+        </div>
+
+        <el-form
+          ref="formRef"
+          :model="form"
+          :rules="rules"
+          label-position="top"
+          :disabled="submitting"
+        >
           <div class="two-column-form">
-            <el-form-item label="公司名称">
+            <el-form-item label="公司名称" prop="companyName">
               <el-input v-model="form.companyName" maxlength="100" placeholder="例如：某科技公司" />
             </el-form-item>
-            <el-form-item label="岗位名称">
-              <el-input v-model="form.jobTitle" maxlength="100" placeholder="例如：前端开发实习生" />
+            <el-form-item label="岗位名称" prop="jobTitle">
+              <el-input v-model="form.jobTitle" maxlength="100" placeholder="例如：全栈开发实习生" />
             </el-form-item>
           </div>
-          <el-form-item label="岗位 JD">
-            <el-input v-model="form.jdContent" type="textarea" :rows="8" maxlength="8000" show-word-limit placeholder="粘贴完整岗位职责与任职要求（后续分析要求 200～8000 字）" />
-          </el-form-item>
-          <el-form-item label="我的简历摘要">
-            <el-input v-model="form.resumeSummary" type="textarea" :rows="6" maxlength="5000" show-word-limit placeholder="下一阶段完善个人档案后，可自动带入项目与能力摘要" />
+
+          <el-form-item label="岗位 JD" prop="jdContent">
+            <el-input
+              v-model="form.jdContent"
+              type="textarea"
+              :rows="8"
+              maxlength="8000"
+              show-word-limit
+              placeholder="粘贴完整岗位职责与任职要求（200～8000 字）"
+            />
           </el-form-item>
 
-          <div class="skill-area">
-            <div><strong>技术栈</strong><small>最多 30 个</small></div>
-            <div class="skill-tags">
-              <el-tag type="info" effect="plain">尚未添加技能</el-tag>
-              <el-button plain :icon="Plus" @click="explainAvailability">添加技术栈</el-button>
-            </div>
-          </div>
+          <el-form-item label="我的经历摘要" prop="resumeSummary">
+            <el-input
+              v-model="form.resumeSummary"
+              type="textarea"
+              :rows="6"
+              maxlength="5000"
+              show-word-limit
+              placeholder="将从个人档案自动带入，也可以针对当前岗位调整"
+            />
+            <p class="profile-hint" :class="{ 'is-error': profileStore.profileError }">
+              {{ profileStatus }}
+            </p>
+          </el-form-item>
 
-          <el-button class="gradient-button analyze-button" :icon="MagicStick" @click="explainAvailability">开始分析</el-button>
-          <p class="form-hint"><el-icon><InfoFilled /></el-icon> 当前不会调用 AI，也不会保存你输入的内容。</p>
+          <el-form-item label="技术栈" prop="skills">
+            <el-select
+              v-model="form.skills"
+              class="skills-select"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              :multiple-limit="30"
+              placeholder="输入技能后按回车添加，例如 Vue 3、TypeScript、Go"
+            />
+          </el-form-item>
+
+          <el-button
+            class="gradient-button analyze-button"
+            :icon="MagicStick"
+            :loading="submitting"
+            @click="handleMockAnalyze"
+          >
+            {{ submitting ? '正在验证输入…' : 'Mock 验证提交' }}
+          </el-button>
+          <p class="form-hint">
+            <el-icon><InfoFilled /></el-icon>
+            真实分析将在 Go API、LLM 校验与数据库持久化完成后开放。
+          </p>
         </el-form>
       </section>
 
-      <section class="panel result-panel">
+      <section v-loading="submitting" class="panel result-panel">
         <div class="result-header">
-          <div><h2 class="panel-title">AI 分析结果</h2><p>完成分析后，将按参考图结构展示匹配建议。</p></div>
-          <span class="result-chip"><el-icon><Search /></el-icon> 等待分析</span>
-        </div>
-        <AppEmpty title="还没有分析结果" description="先准备公司、岗位、JD、简历摘要与技术栈。AI 分析会在后续阶段安全地通过后端接入。" icon="⌕">
-          <div class="result-preview">
-            <span>匹配分数</span><span>核心要求</span><span>能力差距</span><span>优化建议</span>
+          <div>
+            <h2 class="panel-title">提交验证结果</h2>
+            <p>这里只确认页面已经收集到后续接口需要的输入。</p>
           </div>
-        </AppEmpty>
+          <span class="result-chip">
+            <el-icon><Search /></el-icon>
+            {{ mockResult ? 'Mock 已验证' : '等待提交' }}
+          </span>
+        </div>
+
+        <div v-if="mockResult" class="mock-result">
+          <el-tag type="warning" effect="plain">Mock 数据，不是 AI 分析结果</el-tag>
+          <h3>{{ mockResult.companyName }} · {{ mockResult.jobTitle }}</h3>
+          <p>输入已通过前端校验，可以在下一阶段接入 Go JD Analysis API。</p>
+          <div class="result-preview">
+            <span><strong>{{ mockResult.jdLength }}</strong>JD 字数</span>
+            <span><strong>{{ mockResult.skillCount }}</strong>技能数量</span>
+            <span><strong>待接入</strong>匹配分数</span>
+            <span><strong>待接入</strong>改进建议</span>
+          </div>
+        </div>
+
+        <AppEmpty
+          v-else
+          title="还没有验证结果"
+          description="填写公司、岗位、JD、个人经历摘要与技术栈，然后执行 Mock 验证。"
+          icon="⌕"
+        />
+
         <div class="disclaimer">AI 分析结果仅供求职准备参考，请结合自身情况判断和优化。</div>
       </section>
     </div>
@@ -84,14 +273,14 @@ function explainAvailability() {
 </template>
 
 <style scoped>
+.stage-alert { margin-bottom: 18px; }
 .analysis-layout { display: grid; grid-template-columns: minmax(360px,.82fr) minmax(480px,1.18fr); gap: 18px; }
 .form-panel,.result-panel { min-width: 0; padding: 24px; }
 .draft-badge { padding: 5px 9px; border-radius: 8px; color: var(--text-secondary); background: #f4f6fa; font-size: 12px; }
 .two-column-form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
-.skill-area { display: grid; margin: 4px 0 22px; gap: 12px; }
-.skill-area > div:first-child { display: flex; justify-content: space-between; }
-.skill-area small { color: var(--text-secondary); }
-.skill-tags { display: flex; flex-wrap: wrap; gap: 9px; }
+.skills-select { width: 100%; }
+.profile-hint { margin: 6px 0 0; color: var(--text-secondary); font-size: 12px; }
+.profile-hint.is-error { color: var(--color-danger, #f56c6c); }
 .analyze-button { width: 100%; height: 46px; }
 .form-hint { display: flex; margin: 12px 0 0; align-items: center; justify-content: center; gap: 5px; color: var(--text-secondary); font-size: 12px; }
 .result-panel { display: flex; flex-direction: column; }
@@ -99,11 +288,14 @@ function explainAvailability() {
 .result-header p { margin: 5px 0 0; color: var(--text-secondary); }
 .result-chip { display: inline-flex; height: 34px; padding: 0 11px; align-items: center; gap: 6px; border-radius: 9px; color: var(--color-primary); background: #edf3ff; white-space: nowrap; }
 .result-panel :deep(.empty-state) { min-height: 470px; }
-.result-preview { display: grid; width: min(100%,500px); margin-top: 10px; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
-.result-preview span { padding: 9px; border: 1px solid var(--border-color); border-radius: 9px; color: var(--text-secondary); background: #fbfcff; font-size: 12px; }
+.mock-result { display: flex; min-height: 430px; padding: 36px 12px; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.mock-result h3 { margin: 18px 0 8px; font-size: 22px; }
+.mock-result p { margin: 0; color: var(--text-secondary); }
+.result-preview { display: grid; width: min(100%,500px); margin-top: 28px; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
+.result-preview span { display: grid; padding: 12px 9px; gap: 5px; border: 1px solid var(--border-color); border-radius: 9px; color: var(--text-secondary); background: #fbfcff; font-size: 12px; }
+.result-preview strong { color: var(--text-primary); font-size: 15px; }
 .disclaimer { margin-top: auto; padding: 14px; border-radius: 10px; color: var(--text-secondary); background: #f8f9fd; font-size: 12px; text-align: center; }
 
-@media (max-width: 1199px) { .analysis-layout { grid-template-columns: 1fr; } .result-panel :deep(.empty-state) { min-height: 300px; } }
+@media (max-width: 1199px) { .analysis-layout { grid-template-columns: 1fr; } .result-panel :deep(.empty-state),.mock-result { min-height: 300px; } }
 @media (max-width: 600px) { .two-column-form { grid-template-columns: 1fr; gap: 0; } .form-panel,.result-panel { padding: 18px; } .result-preview { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 </style>
-
