@@ -1,11 +1,11 @@
-package application
+package analysis
 
 import (
 	"context"
 	"errors"
 	"strings"
 
-	"job-copilot-backend/internal/domain"
+	analysisdomain "job-copilot-backend/internal/domain/analysis"
 	"job-copilot-backend/internal/port"
 )
 
@@ -21,7 +21,7 @@ type AnalyzeJDService struct {
 
 type AnalyzeJDOutput struct {
 	AnalysisID string
-	Result     domain.AnalysisResult
+	Result     analysisdomain.AnalysisResult
 }
 
 func NewAnalyzeJDService(
@@ -49,7 +49,7 @@ func (service *AnalyzeJDService) Execute(
 		return AnalyzeJDOutput{}, ErrMissingUserID
 	}
 
-	description, err := domain.NewJobDescription(jdContent)
+	description, err := analysisdomain.NewJobDescription(jdContent)
 	if err != nil {
 		return AnalyzeJDOutput{}, err
 	}
