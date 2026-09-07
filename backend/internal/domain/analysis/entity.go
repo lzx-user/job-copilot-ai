@@ -1,6 +1,6 @@
 package analysis
 
-// AnalysisResult 是当前架构阶段的最小分析结果，后续实现 JD 业务时再补充真实字段。
+// AnalysisResult 是 8.21 阶段的最小分析结果；8.22 再扩展完整结构化字段。
 type AnalysisResult struct {
 	matchScore MatchScore
 }

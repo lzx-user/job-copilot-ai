@@ -15,57 +15,55 @@ var (
 )
 
 type AnalyzeJDService struct {
-	aiClient   port.AIClient
-	repository port.AnalysisRepository
+	aiClient port.AIClient
 }
 
 type AnalyzeJDOutput struct {
-	AnalysisID string
-	Result     analysisdomain.AnalysisResult
+	Result analysisdomain.AnalysisResult
 }
 
-func NewAnalyzeJDService(
-	aiClient port.AIClient,
-	repository port.AnalysisRepository,
-) (*AnalyzeJDService, error) {
-	if aiClient == nil || repository == nil {
+type AnalyzeJDCommand struct {
+	CompanyName   string
+	JobTitle      string
+	JDContent     string
+	ResumeSummary string
+	Skills        []string
+}
+
+func NewAnalyzeJDService(aiClient port.AIClient) (*AnalyzeJDService, error) {
+	if aiClient == nil {
 		return nil, ErrMissingDependency
 	}
 
-	return &AnalyzeJDService{
-		aiClient:   aiClient,
-		repository: repository,
-	}, nil
+	return &AnalyzeJDService{aiClient: aiClient}, nil
 }
 
-// Execute 只编排用例顺序；AI 调用和数据保存由 Port 的具体 Adapter 执行。
+// Execute 只编排当前用例顺序；AI 调用由 Port 的具体 Adapter 执行，持久化在后续阶段接入。
 func (service *AnalyzeJDService) Execute(
 	ctx context.Context,
 	userID string,
-	jdContent string,
+	command AnalyzeJDCommand,
 ) (AnalyzeJDOutput, error) {
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
 		return AnalyzeJDOutput{}, ErrMissingUserID
 	}
 
-	description, err := analysisdomain.NewJobDescription(jdContent)
+	request, err := analysisdomain.NewAnalysisRequest(
+		command.CompanyName,
+		command.JobTitle,
+		command.JDContent,
+		command.ResumeSummary,
+		command.Skills,
+	)
 	if err != nil {
 		return AnalyzeJDOutput{}, err
 	}
 
-	result, err := service.aiClient.AnalyzeJD(ctx, description)
+	result, err := service.aiClient.AnalyzeJD(ctx, request)
 	if err != nil {
 		return AnalyzeJDOutput{}, err
 	}
 
-	analysisID, err := service.repository.Save(ctx, userID, result)
-	if err != nil {
-		return AnalyzeJDOutput{}, err
-	}
-
-	return AnalyzeJDOutput{
-		AnalysisID: analysisID,
-		Result:     result,
-	}, nil
+	return AnalyzeJDOutput{Result: result}, nil
 }

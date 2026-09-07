@@ -21,11 +21,11 @@ func NewPlaceholderAdapter() *PlaceholderAdapter {
 
 func (adapter *PlaceholderAdapter) AnalyzeJD(
 	ctx context.Context,
-	_ analysisdomain.JobDescription,
+	_ analysisdomain.AnalysisRequest,
 ) (analysisdomain.AnalysisResult, error) {
 	if err := ctx.Err(); err != nil {
 		return analysisdomain.AnalysisResult{}, err
 	}
 
-	return analysisdomain.AnalysisResult{}, ErrClientNotConfigured
+	return analysisdomain.AnalysisResult{}, errors.Join(port.ErrAIUnavailable, ErrClientNotConfigured)
 }

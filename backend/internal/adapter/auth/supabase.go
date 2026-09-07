@@ -13,8 +13,7 @@ import (
 )
 
 var (
-	ErrInvalidAccessToken = errors.New("invalid access token")
-	ErrInvalidAuthConfig  = errors.New("invalid auth config")
+	ErrInvalidAuthConfig = errors.New("invalid auth config")
 )
 
 // SupabaseAuthAdapter 使用 Supabase Auth 实现核心层要求的认证能力。
@@ -51,7 +50,7 @@ func (adapter *SupabaseAuthAdapter) VerifyAccessToken(
 ) (port.AuthenticatedUser, error) {
 	accessToken = strings.TrimSpace(accessToken)
 	if accessToken == "" {
-		return port.AuthenticatedUser{}, ErrInvalidAccessToken
+		return port.AuthenticatedUser{}, port.ErrUnauthenticated
 	}
 
 	request, err := http.NewRequestWithContext(
@@ -74,7 +73,7 @@ func (adapter *SupabaseAuthAdapter) VerifyAccessToken(
 	defer response.Body.Close()
 
 	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
-		return port.AuthenticatedUser{}, ErrInvalidAccessToken
+		return port.AuthenticatedUser{}, port.ErrUnauthenticated
 	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		return port.AuthenticatedUser{}, fmt.Errorf("supabase auth returned status %d", response.StatusCode)
@@ -87,7 +86,7 @@ func (adapter *SupabaseAuthAdapter) VerifyAccessToken(
 		return port.AuthenticatedUser{}, fmt.Errorf("decode supabase auth response: %w", err)
 	}
 	if strings.TrimSpace(authUser.ID) == "" {
-		return port.AuthenticatedUser{}, ErrInvalidAccessToken
+		return port.AuthenticatedUser{}, port.ErrUnauthenticated
 	}
 
 	return port.AuthenticatedUser{UserID: authUser.ID}, nil

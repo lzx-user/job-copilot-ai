@@ -1,6 +1,11 @@
 package port
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+var ErrUnauthenticated = errors.New("unauthenticated")
 
 // AuthenticatedUser 是访问令牌验证成功后得到的可信用户身份。
 type AuthenticatedUser struct {

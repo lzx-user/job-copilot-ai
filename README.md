@@ -12,13 +12,15 @@
 - Go + Gin 后端基础服务；
 - `GET /health` 与 `GET /api/v1/health`；
 - Go Config、统一 JSON、404 Error Response 和 CORS；
-- 前端健康检查已切换到 Go 的统一响应 Contract。
+- 前端健康检查已切换到 Go 的统一响应 Contract；
+- `POST /api/v1/ai/analyze-jd` 的 Gin Handler、Supabase Bearer Token 校验、Application Service 和 OpenAI 兼容 AI Adapter；
+- 8.21 阶段的最小 `matchScore` JSON 解码与 0～100 校验。
 
 尚未真实完成：
 
 - Supabase 真实凭据下的完整认证联调；
 - `profiles` 表、RLS 和个人档案持久化；
-- JD AI 分析与 `jd_analyses` 持久化；
+- 真实 LLM 凭据下的 JD API 联调、8.22 完整结构化结果与 `jd_analyses` 持久化；
 - 五轮模拟面试、最终报告和历史恢复；
 - Dashboard、History 真实数据及部署验收。
 
@@ -40,8 +42,11 @@
 │  └─ src/views/                     页面
 ├─ backend/                          Go + Gin 后端
 │  ├─ cmd/server/main.go             启动入口
+│  ├─ internal/domain/analysis/      JD 分析实体与业务规则
+│  ├─ internal/application/analysis/ JD 分析用例编排
+│  ├─ internal/port/                 AI、认证与仓储接口
+│  ├─ internal/adapter/              HTTP、AI 与认证适配器
 │  ├─ internal/config/               环境配置
-│  ├─ internal/adapter/http/         Router、Handler、Middleware
 │  ├─ pkg/response/                  统一 JSON
 │  ├─ go.mod
 │  └─ .env.example
@@ -82,6 +87,8 @@ npm run dev
 - 基础健康检查：<http://localhost:8080/health>
 - V1 API 健康检查：<http://localhost:8080/api/v1/health>
 
+JD 分析接口：`POST http://localhost:8080/api/v1/ai/analyze-jd`（需要 Supabase access token）。
+
 健康检查响应：
 
 ```json
@@ -110,7 +117,15 @@ VITE_SUPABASE_ANON_KEY=
 APP_PORT=8080
 APP_ENV=development
 FRONTEND_ORIGIN=http://localhost:5173
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+AI_API_BASE_URL=
+AI_API_KEY=
+AI_MODEL=
+AI_TIMEOUT_SECONDS=30
 ```
+
+`AI_API_BASE_URL` 填 OpenAI 兼容 API 的 `/v1` 基础地址，后端会请求 `/chat/completions`。当认证或 AI 配置缺失时，健康检查仍可启动，业务接口会返回明确的未配置错误，不会生成假结果。
 
 真实 `.env` 和 `.env.local` 不提交 Git。Supabase service role key、数据库密码和 AI API Key 只能放后端运行环境，不能放入浏览器代码。
 
