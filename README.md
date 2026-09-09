@@ -14,13 +14,13 @@
 - Go Config、统一 JSON、404 Error Response 和 CORS；
 - 前端健康检查已切换到 Go 的统一响应 Contract；
 - `POST /api/v1/ai/analyze-jd` 的 Gin Handler、Supabase Bearer Token 校验、Application Service 和 OpenAI 兼容 AI Adapter；
-- 8.21 阶段的最小 `matchScore` JSON 解码与 0～100 校验。
+- 8.22 阶段的八字段 Prompt、严格 JSON 解码、结构化结果校验和 AI 异常响应。
 
 尚未真实完成：
 
 - Supabase 真实凭据下的完整认证联调；
 - `profiles` 表、RLS 和个人档案持久化；
-- 真实 LLM 凭据下的 JD API 联调、8.22 完整结构化结果与 `jd_analyses` 持久化；
+- 真实 LLM 凭据下的 JD API 联调与 `jd_analyses` 持久化；
 - 五轮模拟面试、最终报告和历史恢复；
 - Dashboard、History 真实数据及部署验收。
 

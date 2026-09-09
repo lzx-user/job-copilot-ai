@@ -60,7 +60,14 @@ func (handler *AnalyzeJDHandler) Handle(ctx *gin.Context) {
 	}
 
 	response.Success(ctx, gin.H{
-		"matchScore": output.Result.MatchScore(),
+		"matchScore":        output.Result.MatchScore(),
+		"jobSummary":        output.Result.JobSummary(),
+		"coreRequirements":  output.Result.CoreRequirements(),
+		"matchedSkills":     output.Result.MatchedSkills(),
+		"missingSkills":     output.Result.MissingSkills(),
+		"resumeSuggestions": output.Result.ResumeSuggestions(),
+		"preparationTopics": output.Result.PreparationTopics(),
+		"greetingMessage":   output.Result.GreetingMessage(),
 	})
 }
 
