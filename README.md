@@ -19,13 +19,14 @@
 - `jd_analyses` migration、RLS、最小角色权限、Supabase Repository 和前端真实分析结果页；
 - 使用演示数据完成登录、Go API、真实 LLM、结构校验、数据库写入和结果展示的端到端验收。
 - `interview_sessions`、`interview_messages` migration 与 RLS，以及五轮面试的 Session、Message、Status 领域规则。
+- `POST /api/v1/ai/interview/start` 的鉴权、JD 上下文读取、AI 第一题生成和会话启动持久化代码链路。
 
 尚未真实完成：
 
 - Supabase 真实凭据下的完整认证联调；
 - `profiles` 表、RLS 和个人档案持久化；
 - JD 分析历史列表与分析详情恢复；
-- 模拟面试 API、页面真实联调、最终报告和历史恢复；
+- 模拟面试后续轮次 API、页面真实联调、最终报告和历史恢复；
 - Dashboard、History 真实数据及部署验收。
 
 ## 技术栈
@@ -49,6 +50,7 @@
 │  ├─ internal/domain/analysis/      JD 分析实体与业务规则
 │  ├─ internal/domain/interview/     模拟面试实体、状态与五轮规则
 │  ├─ internal/application/analysis/ JD 分析用例编排
+│  ├─ internal/application/interview/ 模拟面试启动用例编排
 │  ├─ internal/port/                 AI、认证与仓储接口
 │  ├─ internal/adapter/              HTTP、AI 与认证适配器
 │  ├─ internal/config/               环境配置
@@ -92,7 +94,19 @@ npm run dev
 - 基础健康检查：<http://localhost:8080/health>
 - V1 API 健康检查：<http://localhost:8080/api/v1/health>
 
-JD 分析接口：`POST http://localhost:8080/api/v1/ai/analyze-jd`（需要 Supabase access token）。AI 结果通过八字段校验后才会写入 `jd_analyses`。新环境需要按文件名顺序执行 `supabase/migrations/` 下的 SQL migration；模拟面试 migration 目前只是数据库与领域基础，尚未接入业务 API。
+JD 分析接口：`POST http://localhost:8080/api/v1/ai/analyze-jd`（需要 Supabase access token）。AI 结果通过八字段校验后才会写入 `jd_analyses`。
+
+启动模拟面试：`POST http://localhost:8080/api/v1/ai/interview/start`（需要 Supabase access token），请求体为：
+
+```json
+{
+  "analysisId": "当前用户已有的 JD 分析 UUID"
+}
+```
+
+成功响应的 `data` 包含 `sessionId`、`status`、`currentRound`、`maxRounds` 和 `question`。第一题和 Session 第 1 轮状态通过数据库函数原子保存；AI 失败时不会返回或保存伪造问题。
+
+新环境需要按文件名顺序执行 `supabase/migrations/` 下的 SQL migration。当前尚未完成面试回答、后续轮次和最终报告接口。
 
 健康检查响应：
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	analysisdomain "job-copilot-backend/internal/domain/analysis"
+	interviewdomain "job-copilot-backend/internal/domain/interview"
 )
 
 var (
@@ -13,7 +14,8 @@ var (
 	ErrAIInvalidResponse = errors.New("AI returned an invalid response")
 )
 
-// AIClient 描述 Application 需要的 JD 分析能力，不暴露具体模型 SDK。
+// AIClient 描述 Application 当前需要的 AI 能力，不暴露具体模型 SDK。
 type AIClient interface {
 	AnalyzeJD(ctx context.Context, request analysisdomain.AnalysisRequest) (analysisdomain.AnalysisResult, error)
+	GenerateFirstInterviewQuestion(ctx context.Context, input interviewdomain.InterviewContext) (string, error)
 }

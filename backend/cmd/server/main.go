@@ -9,6 +9,7 @@ import (
 	httpadapter "job-copilot-backend/internal/adapter/http"
 	"job-copilot-backend/internal/adapter/repository"
 	analysisapp "job-copilot-backend/internal/application/analysis"
+	interviewapp "job-copilot-backend/internal/application/interview"
 	"job-copilot-backend/internal/config"
 	"job-copilot-backend/internal/port"
 )
@@ -43,14 +44,32 @@ func main() {
 	); err == nil {
 		analysisRepository = configuredRepository
 	}
+	var interviewRepository port.InterviewRepository = repository.NewPlaceholderInterviewRepository()
+	if configuredRepository, err := repository.NewSupabaseInterviewRepository(
+		appConfig.SupabaseURL,
+		appConfig.SupabaseAnonKey,
+		nil,
+	); err == nil {
+		interviewRepository = configuredRepository
+	}
 
 	analyzeJDService, err := analysisapp.NewAnalyzeJDService(aiClient, analysisRepository)
 	if err != nil {
 		log.Fatalf("初始化 JD 分析服务失败：%v", err)
 	}
+	startInterviewService, err := interviewapp.NewStartInterviewService(aiClient, interviewRepository)
+	if err != nil {
+		log.Fatalf("初始化模拟面试服务失败：%v", err)
+	}
+	listInterviewOptionsService, err := interviewapp.NewListInterviewOptionsService(interviewRepository)
+	if err != nil {
+		log.Fatalf("初始化面试岗位选项服务失败：%v", err)
+	}
 	engine := httpadapter.NewRouter(appConfig.FrontendOrigin, httpadapter.Dependencies{
-		AuthProvider:     authProvider,
-		AnalyzeJDService: analyzeJDService,
+		AuthProvider:                authProvider,
+		AnalyzeJDService:            analyzeJDService,
+		StartInterviewService:       startInterviewService,
+		ListInterviewOptionsService: listInterviewOptionsService,
 	})
 	address := ":" + appConfig.AppPort
 

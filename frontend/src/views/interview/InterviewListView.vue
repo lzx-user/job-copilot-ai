@@ -2,7 +2,11 @@
 import { Briefcase, ChatDotRound, Microphone, Reading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { Component } from 'vue'
+import { onMounted, ref } from 'vue'
+import { listInterviewOptions, startInterview } from '../../api/interview.api'
 import AppEmpty from '../../components/common/AppEmpty.vue'
+import type { InterviewOption, StartInterviewResult } from '../../types/interview'
+import { toUserMessage } from '../../utils/error'
 
 interface InterviewMode {
   title: string
@@ -17,23 +21,56 @@ const modes: InterviewMode[] = [
   { title: '综合面', description: '兼顾经历表达、岗位动机与协作思考', icon: ChatDotRound, tone: 'green' },
 ]
 
-function explainAvailability() {
-  ElMessage.info('模拟面试业务将在 7 月 22 日之后接入，当前只展示流程骨架。')
+const options = ref<InterviewOption[]>([])
+const selectedAnalysisId = ref('')
+const loadingOptions = ref(true)
+const starting = ref(false)
+const loadError = ref('')
+const startResult = ref<StartInterviewResult | null>(null)
+
+async function loadOptions() {
+  loadingOptions.value = true
+  loadError.value = ''
+  try {
+    const result = await listInterviewOptions()
+    options.value = result.items
+    selectedAnalysisId.value = result.items[0]?.analysisId ?? ''
+  } catch (error) {
+    loadError.value = toUserMessage(error)
+  } finally {
+    loadingOptions.value = false
+  }
 }
+
+async function handleStart() {
+  if (!selectedAnalysisId.value || starting.value) return
+  starting.value = true
+  startResult.value = null
+  try {
+    startResult.value = await startInterview(selectedAnalysisId.value)
+    ElMessage.success('模拟面试已开始，第一题已保存')
+  } catch (error) {
+    ElMessage.error(toUserMessage(error))
+  } finally {
+    starting.value = false
+  }
+}
+
+onMounted(loadOptions)
 </script>
 
 <template>
   <div class="page-shell">
     <div class="page-heading">
-      <div><span class="section-label">MOCK INTERVIEW</span><h1>模拟面试</h1><p>先熟悉练习模式，后续可基于真实 JD 开启多轮文字面试。</p></div>
-      <el-tag effect="plain" round>固定 5 轮 · 后续阶段开放</el-tag>
+      <div><span class="section-label">MOCK INTERVIEW</span><h1>模拟面试</h1><p>选择已保存的 JD，由 AI 生成第一道针对性面试题。</p></div>
+      <el-tag effect="plain" round>固定 5 轮 · 第 1 轮已接入</el-tag>
     </div>
 
     <section class="panel intro-panel">
       <div class="intro-copy">
         <span class="intro-badge"><el-icon><Reading /></el-icon> 面试准备流程</span>
         <h2>选择合适的练习方式，<br /><em>每次只聚焦一个目标。</em></h2>
-        <p>真实面试功能会在后续阶段结合个人档案与岗位 JD 接入。当前页面不生成问题，也不保存会话。</p>
+        <p>当前阶段会创建真实会话并保存第一题；回答评分与后续轮次将在下一阶段接入。</p>
       </div>
       <div class="interview-visual" aria-hidden="true"><span>AI</span><i /><b>•••</b></div>
     </section>
@@ -47,10 +84,38 @@ function explainAvailability() {
     </section>
 
     <section class="panel jd-selector">
-      <div class="panel-header"><div><h2 class="panel-title">选择目标岗位</h2><p>后续将从已保存的 JD 分析记录中选择。</p></div><el-tag type="info">暂无记录</el-tag></div>
-      <AppEmpty title="还没有可用于面试的 JD" description="当前阶段不会创建虚假岗位。后续完成一份真实 JD 分析后，可以从这里开始面试。" icon="▤">
-        <el-button class="gradient-button" @click="explainAvailability">开始面试（后续开放）</el-button>
-      </AppEmpty>
+      <div class="panel-header">
+        <div><h2 class="panel-title">选择目标岗位</h2><p>仅展示当前账号最近保存的 JD 分析。</p></div>
+        <el-tag type="info">{{ options.length }} 条记录</el-tag>
+      </div>
+
+      <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
+      <div v-loading="loadingOptions">
+        <el-radio-group v-if="options.length" v-model="selectedAnalysisId" class="jd-option-list">
+          <el-radio v-for="option in options" :key="option.analysisId" :value="option.analysisId" border>
+            <span class="jd-option-title">{{ option.companyName }} · {{ option.jobTitle }}</span>
+            <span class="jd-option-score">匹配度 {{ option.matchScore }}</span>
+          </el-radio>
+        </el-radio-group>
+        <AppEmpty v-else-if="!loadingOptions && !loadError" title="还没有可用于面试的 JD" description="先完成一份真实 JD 分析，再从这里开始面试。" icon="▤" />
+      </div>
+
+      <el-button
+        v-if="options.length"
+        class="gradient-button start-button"
+        :loading="starting"
+        :disabled="!selectedAnalysisId"
+        @click="handleStart"
+      >
+        {{ starting ? 'AI 正在生成第一题…' : '开始模拟面试' }}
+      </el-button>
+
+      <section v-if="startResult" class="first-question">
+        <div><span>第 {{ startResult.currentRound }} / {{ startResult.maxRounds }} 轮</span><el-tag type="success">已保存</el-tag></div>
+        <h3>面试官</h3>
+        <p>{{ startResult.question }}</p>
+        <small>Session：{{ startResult.sessionId }}</small>
+      </section>
     </section>
   </div>
 </template>
@@ -75,7 +140,17 @@ function explainAvailability() {
 .jd-selector { padding: 24px; }
 .panel-header p { margin: 5px 0 0; color: var(--text-secondary); }
 .jd-selector :deep(.empty-state) { min-height: 270px; border: 1px dashed #dbe2f2; border-radius: 14px; background: #fbfcff; }
+.jd-option-list { display: grid; margin-top: 20px; gap: 12px; }
+.jd-option-list :deep(.el-radio) { width: 100%; height: auto; min-height: 58px; margin: 0; padding: 14px 16px; }
+.jd-option-list :deep(.el-radio__label) { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 16px; }
+.jd-option-title { color: var(--text-primary); font-weight: 600; }
+.jd-option-score { color: var(--color-primary); font-size: 13px; }
+.start-button { width: 100%; height: 44px; margin-top: 18px; }
+.first-question { margin-top: 20px; padding: 20px; border: 1px solid #c9eadc; border-radius: 14px; background: #f3fbf7; }
+.first-question > div { display: flex; align-items: center; justify-content: space-between; }
+.first-question h3 { margin: 16px 0 8px; }
+.first-question p { margin: 0; color: var(--text-regular); line-height: 1.8; }
+.first-question small { display: block; margin-top: 14px; color: var(--text-secondary); word-break: break-all; }
 @media (max-width: 1000px) { .mode-grid { grid-template-columns: 1fr; } }
 @media (max-width: 767px) { .intro-panel { min-height: 250px; padding: 24px; } .interview-visual { right: -70px; opacity: .35; } .mode-card { grid-template-columns: 50px 1fr; } .mode-card .el-radio { grid-column: 2; } .jd-selector { padding: 18px; } }
 </style>
-

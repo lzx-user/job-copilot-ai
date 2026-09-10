@@ -6,12 +6,15 @@ import (
 	"job-copilot-backend/internal/adapter/http/handler"
 	"job-copilot-backend/internal/adapter/http/middleware"
 	analysisapp "job-copilot-backend/internal/application/analysis"
+	interviewapp "job-copilot-backend/internal/application/interview"
 	"job-copilot-backend/internal/port"
 )
 
 type Dependencies struct {
-	AuthProvider     port.AuthProvider
-	AnalyzeJDService *analysisapp.AnalyzeJDService
+	AuthProvider                port.AuthProvider
+	AnalyzeJDService            *analysisapp.AnalyzeJDService
+	StartInterviewService       *interviewapp.StartInterviewService
+	ListInterviewOptionsService *interviewapp.ListInterviewOptionsService
 }
 
 func NewRouter(frontendOrigin string, dependencies Dependencies) *gin.Engine {
@@ -27,6 +30,8 @@ func NewRouter(frontendOrigin string, dependencies Dependencies) *gin.Engine {
 	aiRoutes := apiV1.Group("/ai")
 	aiRoutes.Use(middleware.Authenticate(dependencies.AuthProvider))
 	aiRoutes.POST("/analyze-jd", handler.NewAnalyzeJDHandler(dependencies.AnalyzeJDService).Handle)
+	aiRoutes.GET("/interview/options", handler.NewListInterviewOptionsHandler(dependencies.ListInterviewOptionsService).Handle)
+	aiRoutes.POST("/interview/start", handler.NewStartInterviewHandler(dependencies.StartInterviewService).Handle)
 
 	engine.NoRoute(handler.NotFound)
 

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	analysisdomain "job-copilot-backend/internal/domain/analysis"
+	interviewdomain "job-copilot-backend/internal/domain/interview"
 	"job-copilot-backend/internal/port"
 )
 
@@ -74,52 +75,84 @@ func (adapter *OpenAICompatibleAdapter) AnalyzeJD(
 	ctx context.Context,
 	request analysisdomain.AnalysisRequest,
 ) (analysisdomain.AnalysisResult, error) {
-	payload := chatCompletionRequest{
-		Model: adapter.model,
-		Messages: []chatMessage{
-			{
-				Role:    "system",
-				Content: analysisSystemPrompt,
-			},
-			{
-				Role:    "user",
-				Content: buildAnalysisPrompt(request),
-			},
+	content, err := adapter.requestJSONCompletion(ctx, []chatMessage{
+		{
+			Role:    "system",
+			Content: analysisSystemPrompt,
 		},
-		Temperature:    0.2,
+		{
+			Role:    "user",
+			Content: buildAnalysisPrompt(request),
+		},
+	}, 0.2)
+	if err != nil {
+		return analysisdomain.AnalysisResult{}, err
+	}
+	return decodeAnalysisResult(content)
+}
+
+func (adapter *OpenAICompatibleAdapter) GenerateFirstInterviewQuestion(
+	ctx context.Context,
+	input interviewdomain.InterviewContext,
+) (string, error) {
+	content, err := adapter.requestJSONCompletion(ctx, []chatMessage{
+		{
+			Role:    "system",
+			Content: interviewQuestionSystemPrompt,
+		},
+		{
+			Role:    "user",
+			Content: buildInterviewQuestionPrompt(input),
+		},
+	}, 0.5)
+	if err != nil {
+		return "", err
+	}
+	return decodeInterviewQuestion(content)
+}
+
+func (adapter *OpenAICompatibleAdapter) requestJSONCompletion(
+	ctx context.Context,
+	messages []chatMessage,
+	temperature float64,
+) (string, error) {
+	payload := chatCompletionRequest{
+		Model:          adapter.model,
+		Messages:       messages,
+		Temperature:    temperature,
 		ResponseFormat: responseFormat{Type: "json_object"},
 	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return analysisdomain.AnalysisResult{}, fmt.Errorf("encode AI request: %w", err)
+		return "", fmt.Errorf("encode AI request: %w", err)
 	}
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, adapter.endpoint, bytes.NewReader(body))
 	if err != nil {
-		return analysisdomain.AnalysisResult{}, fmt.Errorf("create AI request: %w", err)
+		return "", fmt.Errorf("create AI request: %w", err)
 	}
 	httpRequest.Header.Set("Authorization", "Bearer "+adapter.apiKey)
 	httpRequest.Header.Set("Content-Type", "application/json")
 
 	httpResponse, err := adapter.httpClient.Do(httpRequest)
 	if err != nil {
-		return analysisdomain.AnalysisResult{}, errors.Join(port.ErrAIUpstream, err)
+		return "", errors.Join(port.ErrAIUpstream, err)
 	}
 	defer httpResponse.Body.Close()
 
 	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
 		// 不读取或记录上游响应体，避免泄露请求上下文。
 		_, _ = io.Copy(io.Discard, httpResponse.Body)
-		return analysisdomain.AnalysisResult{}, fmt.Errorf("%w: status %d", port.ErrAIUpstream, httpResponse.StatusCode)
+		return "", fmt.Errorf("%w: status %d", port.ErrAIUpstream, httpResponse.StatusCode)
 	}
 
 	var completion chatCompletionResponse
 	if err := json.NewDecoder(httpResponse.Body).Decode(&completion); err != nil ||
 		len(completion.Choices) == 0 || strings.TrimSpace(completion.Choices[0].Message.Content) == "" {
-		return analysisdomain.AnalysisResult{}, port.ErrAIInvalidResponse
+		return "", port.ErrAIInvalidResponse
 	}
 
-	return decodeAnalysisResult(completion.Choices[0].Message.Content)
+	return completion.Choices[0].Message.Content, nil
 }
 
 const analysisSystemPrompt = `你是校招岗位匹配分析助手。请根据候选人信息与岗位要求给出客观、具体、可执行的分析。
@@ -145,6 +178,47 @@ func buildAnalysisPrompt(request analysisdomain.AnalysisRequest) string {
 		request.ResumeSummary(),
 		strings.Join(request.Skills(), "、"),
 	)
+}
+
+const interviewQuestionSystemPrompt = `你是一名严谨的校招面试官。请结合岗位要求与候选人经历生成第一道面试题。
+第一题应聚焦最关键的岗位能力，问题具体、一次只问一件事，不要提供答案，不要虚构候选人经历。
+只返回一个 JSON 对象，不要返回 Markdown、代码块或解释，并且只能包含：
+{"question":"面试题内容"}`
+
+func buildInterviewQuestionPrompt(input interviewdomain.InterviewContext) string {
+	return fmt.Sprintf(
+		"公司：%s\n岗位：%s\n岗位 JD：\n%s\n\n候选人经历摘要：\n%s\n\n候选人技能：%s\n岗位核心要求：%s\n建议准备主题：%s",
+		input.CompanyName(),
+		input.JobTitle(),
+		input.JDContent(),
+		input.ResumeSummary(),
+		strings.Join(input.Skills(), "、"),
+		strings.Join(input.CoreRequirements(), "、"),
+		strings.Join(input.PreparationTopics(), "、"),
+	)
+}
+
+func decodeInterviewQuestion(content string) (string, error) {
+	var output struct {
+		Question *string `json:"question"`
+	}
+	decoder := json.NewDecoder(strings.NewReader(content))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&output); err != nil {
+		return "", errors.Join(port.ErrAIInvalidResponse, err)
+	}
+	if err := ensureJSONEnded(decoder); err != nil {
+		return "", errors.Join(port.ErrAIInvalidResponse, err)
+	}
+	if output.Question == nil {
+		return "", port.ErrAIInvalidResponse
+	}
+
+	question := strings.TrimSpace(*output.Question)
+	if question == "" || len([]rune(question)) > 2000 {
+		return "", port.ErrAIInvalidResponse
+	}
+	return question, nil
 }
 
 func decodeAnalysisResult(content string) (analysisdomain.AnalysisResult, error) {
