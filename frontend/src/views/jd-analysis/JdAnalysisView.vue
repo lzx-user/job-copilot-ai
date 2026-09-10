@@ -3,8 +3,11 @@ import { InfoFilled, MagicStick, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { analyzeJD } from '../../api/jd-analysis.api'
 import AppEmpty from '../../components/common/AppEmpty.vue'
 import { useProfileStore } from '../../stores/profile.store'
+import type { JdAnalysisResult } from '../../types/jd-analysis'
+import { toUserMessage } from '../../utils/error'
 
 interface JdDraft {
   companyName: string
@@ -14,17 +17,11 @@ interface JdDraft {
   skills: string[]
 }
 
-interface MockSubmissionSummary {
-  companyName: string
-  jobTitle: string
-  jdLength: number
-  skillCount: number
-}
-
 const profileStore = useProfileStore()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
-const mockResult = ref<MockSubmissionSummary | null>(null)
+const analysisResult = ref<JdAnalysisResult | null>(null)
+const analysisError = ref('')
 let hasAppliedProfile = false
 
 const form = reactive<JdDraft>({
@@ -107,7 +104,7 @@ function normalizeSkills(values: string[]) {
   return Array.from(uniqueSkills.values())
 }
 
-async function handleMockAnalyze() {
+async function handleAnalyze() {
   if (submitting.value) return
 
   form.companyName = form.companyName.trim()
@@ -124,19 +121,24 @@ async function handleMockAnalyze() {
   }
 
   submitting.value = true
-  mockResult.value = null
+  analysisResult.value = null
+  analysisError.value = ''
 
-  // 8.20 仅模拟一次提交等待，真实 Go API 与 AI 结果在后续阶段接入。
-  window.setTimeout(() => {
-    mockResult.value = {
+  try {
+    analysisResult.value = await analyzeJD({
       companyName: form.companyName,
       jobTitle: form.jobTitle,
-      jdLength: form.jdContent.length,
-      skillCount: form.skills.length,
-    }
+      jdContent: form.jdContent,
+      resumeSummary: form.resumeSummary,
+      skills: form.skills,
+    })
+    ElMessage.success('分析完成并已保存')
+  } catch (error) {
+    analysisError.value = toUserMessage(error)
+    ElMessage.error(analysisError.value)
+  } finally {
     submitting.value = false
-    ElMessage.success('Mock 提交验证通过')
-  }, 600)
+  }
 }
 </script>
 
@@ -148,13 +150,13 @@ async function handleMockAnalyze() {
         <h1>JD 智能匹配分析</h1>
         <p>整理岗位信息与个人经历，为后续 AI 匹配分析做好准备。</p>
       </div>
-      <el-tag effect="plain" round>8.20 · Mock 输入验证</el-tag>
+      <el-tag effect="plain" round>8.23 · 真实分析闭环</el-tag>
     </div>
 
     <el-alert
       class="stage-alert"
-      title="当前只验证输入与交互，不会调用 AI，也不会保存内容"
-      type="info"
+      title="分析由 Go 后端调用 AI；结构化结果校验通过后保存到数据库"
+      type="success"
       :closable="false"
       show-icon
     />
@@ -224,13 +226,13 @@ async function handleMockAnalyze() {
             class="gradient-button analyze-button"
             :icon="MagicStick"
             :loading="submitting"
-            @click="handleMockAnalyze"
+            @click="handleAnalyze"
           >
-            {{ submitting ? '正在验证输入…' : 'Mock 验证提交' }}
+            {{ submitting ? 'AI 正在分析…' : '开始匹配分析' }}
           </el-button>
           <p class="form-hint">
             <el-icon><InfoFilled /></el-icon>
-            真实分析将在 Go API、LLM 校验与数据库持久化完成后开放。
+            提交后将消耗一次 AI 调用，只有合法结果才会保存。
           </p>
         </el-form>
       </section>
@@ -238,31 +240,77 @@ async function handleMockAnalyze() {
       <section v-loading="submitting" class="panel result-panel">
         <div class="result-header">
           <div>
-            <h2 class="panel-title">提交验证结果</h2>
-            <p>这里只确认页面已经收集到后续接口需要的输入。</p>
+            <h2 class="panel-title">匹配分析结果</h2>
+            <p>从岗位要求、能力匹配与准备方向三个维度辅助决策。</p>
           </div>
           <span class="result-chip">
             <el-icon><Search /></el-icon>
-            {{ mockResult ? 'Mock 已验证' : '等待提交' }}
+            {{ analysisResult ? '分析已保存' : '等待分析' }}
           </span>
         </div>
 
-        <div v-if="mockResult" class="mock-result">
-          <el-tag type="warning" effect="plain">Mock 数据，不是 AI 分析结果</el-tag>
-          <h3>{{ mockResult.companyName }} · {{ mockResult.jobTitle }}</h3>
-          <p>输入已通过前端校验，可以在下一阶段接入 Go JD Analysis API。</p>
-          <div class="result-preview">
-            <span><strong>{{ mockResult.jdLength }}</strong>JD 字数</span>
-            <span><strong>{{ mockResult.skillCount }}</strong>技能数量</span>
-            <span><strong>待接入</strong>匹配分数</span>
-            <span><strong>待接入</strong>改进建议</span>
+        <el-alert
+          v-if="analysisError"
+          class="result-error"
+          :title="analysisError"
+          type="error"
+          :closable="false"
+          show-icon
+        />
+
+        <div v-if="analysisResult" class="analysis-result">
+          <div class="score-summary">
+            <el-progress
+              type="dashboard"
+              :percentage="analysisResult.matchScore"
+              :width="132"
+              :stroke-width="10"
+            />
+            <div>
+              <h3>{{ analysisResult.greetingMessage }}</h3>
+              <p>{{ analysisResult.jobSummary }}</p>
+            </div>
+          </div>
+
+          <div class="result-section">
+            <h3>岗位核心要求</h3>
+            <ul><li v-for="item in analysisResult.coreRequirements" :key="item">{{ item }}</li></ul>
+          </div>
+
+          <div class="skill-groups">
+            <div class="result-section">
+              <h3>已匹配能力</h3>
+              <div v-if="analysisResult.matchedSkills.length" class="tag-list">
+                <el-tag v-for="item in analysisResult.matchedSkills" :key="item" type="success" effect="light">{{ item }}</el-tag>
+              </div>
+              <p v-else class="empty-copy">暂未识别到明确匹配项</p>
+            </div>
+            <div class="result-section">
+              <h3>待补充能力</h3>
+              <div v-if="analysisResult.missingSkills.length" class="tag-list">
+                <el-tag v-for="item in analysisResult.missingSkills" :key="item" type="warning" effect="light">{{ item }}</el-tag>
+              </div>
+              <p v-else class="empty-copy">暂无明显能力缺口</p>
+            </div>
+          </div>
+
+          <div class="result-section">
+            <h3>简历优化建议</h3>
+            <ol><li v-for="item in analysisResult.resumeSuggestions" :key="item">{{ item }}</li></ol>
+          </div>
+
+          <div class="result-section">
+            <h3>面试准备主题</h3>
+            <div class="tag-list">
+              <el-tag v-for="item in analysisResult.preparationTopics" :key="item" effect="plain">{{ item }}</el-tag>
+            </div>
           </div>
         </div>
 
         <AppEmpty
           v-else
-          title="还没有验证结果"
-          description="填写公司、岗位、JD、个人经历摘要与技术栈，然后执行 Mock 验证。"
+          :title="analysisError ? '本次分析未完成' : '还没有分析结果'"
+          :description="analysisError ? '请根据上方提示检查服务状态后重试。' : '填写公司、岗位、JD、个人经历摘要与技术栈，然后开始真实分析。'"
           icon="⌕"
         />
 
@@ -288,14 +336,19 @@ async function handleMockAnalyze() {
 .result-header p { margin: 5px 0 0; color: var(--text-secondary); }
 .result-chip { display: inline-flex; height: 34px; padding: 0 11px; align-items: center; gap: 6px; border-radius: 9px; color: var(--color-primary); background: #edf3ff; white-space: nowrap; }
 .result-panel :deep(.empty-state) { min-height: 470px; }
-.mock-result { display: flex; min-height: 430px; padding: 36px 12px; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-.mock-result h3 { margin: 18px 0 8px; font-size: 22px; }
-.mock-result p { margin: 0; color: var(--text-secondary); }
-.result-preview { display: grid; width: min(100%,500px); margin-top: 28px; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
-.result-preview span { display: grid; padding: 12px 9px; gap: 5px; border: 1px solid var(--border-color); border-radius: 9px; color: var(--text-secondary); background: #fbfcff; font-size: 12px; }
-.result-preview strong { color: var(--text-primary); font-size: 15px; }
+.result-error { margin-top: 18px; }
+.analysis-result { display: grid; padding: 24px 0; gap: 16px; }
+.score-summary { display: flex; padding: 20px; align-items: center; gap: 24px; border-radius: 14px; background: linear-gradient(135deg,#f2f7ff,#f8f5ff); }
+.score-summary h3 { margin: 0 0 8px; font-size: 20px; }
+.score-summary p { margin: 0; color: var(--text-secondary); line-height: 1.7; }
+.result-section { padding: 18px; border: 1px solid var(--border-color); border-radius: 12px; background: #fff; }
+.result-section h3 { margin: 0 0 12px; font-size: 15px; }
+.result-section ul,.result-section ol { display: grid; margin: 0; padding-left: 20px; gap: 8px; color: var(--text-secondary); line-height: 1.6; }
+.skill-groups { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.tag-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.empty-copy { margin: 0; color: var(--text-secondary); font-size: 13px; }
 .disclaimer { margin-top: auto; padding: 14px; border-radius: 10px; color: var(--text-secondary); background: #f8f9fd; font-size: 12px; text-align: center; }
 
-@media (max-width: 1199px) { .analysis-layout { grid-template-columns: 1fr; } .result-panel :deep(.empty-state),.mock-result { min-height: 300px; } }
-@media (max-width: 600px) { .two-column-form { grid-template-columns: 1fr; gap: 0; } .form-panel,.result-panel { padding: 18px; } .result-preview { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 1199px) { .analysis-layout { grid-template-columns: 1fr; } .result-panel :deep(.empty-state) { min-height: 300px; } }
+@media (max-width: 600px) { .two-column-form,.skill-groups { grid-template-columns: 1fr; gap: 0; } .skill-groups { gap: 12px; } .form-panel,.result-panel { padding: 18px; } .score-summary { flex-direction: column; text-align: center; } }
 </style>

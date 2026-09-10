@@ -14,6 +14,10 @@ export function toUserMessage(error: unknown): string {
   if (error instanceof AxiosError) {
     if (error.code === 'ECONNABORTED') return '请求超时，请稍后重试'
     if (!error.response) return '网络连接异常，请检查后重试'
+    const responseMessage = (error.response.data as { message?: unknown } | null)?.message
+    if (typeof responseMessage === 'string' && responseMessage.trim()) {
+      return responseMessage
+    }
     return '后端服务暂时无法访问，请稍后重试'
   }
 
@@ -26,4 +30,3 @@ export function toUserMessage(error: unknown): string {
   const matched = AUTH_ERROR_MESSAGES.find(([pattern]) => pattern.test(message))
   return matched?.[1] ?? '操作失败，请稍后重试'
 }
-
