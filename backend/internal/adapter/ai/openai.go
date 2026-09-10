@@ -79,7 +79,7 @@ func (adapter *OpenAICompatibleAdapter) AnalyzeJD(
 		Messages: []chatMessage{
 			{
 				Role:    "system",
-				Content: "你是校招岗位匹配分析助手。对比候选人经历与岗位要求，只返回 JSON：{\"matchScore\": 0到100的整数}。",
+				Content: analysisSystemPrompt,
 			},
 			{
 				Role:    "user",
@@ -122,6 +122,20 @@ func (adapter *OpenAICompatibleAdapter) AnalyzeJD(
 	return decodeAnalysisResult(completion.Choices[0].Message.Content)
 }
 
+const analysisSystemPrompt = `你是校招岗位匹配分析助手。请根据候选人信息与岗位要求给出客观、具体、可执行的分析。
+只返回一个 JSON 对象，不要返回 Markdown、代码块或解释。必须且只能包含以下字段：
+{
+  "matchScore": 0到100的整数,
+  "jobSummary": "岗位核心职责概述",
+  "coreRequirements": ["岗位核心要求"],
+  "matchedSkills": ["候选人已匹配的技能或经历"],
+  "missingSkills": ["候选人欠缺或材料中未体现的技能"],
+  "resumeSuggestions": ["具体的简历修改建议"],
+  "preparationTopics": ["面试前应准备的主题"],
+  "greetingMessage": "面向候选人的简短总结"
+}
+coreRequirements、resumeSuggestions、preparationTopics 至少包含一项。matchedSkills 和 missingSkills 没有内容时返回空数组。不要臆造候选人经历。`
+
 func buildAnalysisPrompt(request analysisdomain.AnalysisRequest) string {
 	return fmt.Sprintf(
 		"公司：%s\n岗位：%s\n岗位 JD：\n%s\n\n候选人经历摘要：\n%s\n\n候选人技能：%s",
@@ -135,7 +149,14 @@ func buildAnalysisPrompt(request analysisdomain.AnalysisRequest) string {
 
 func decodeAnalysisResult(content string) (analysisdomain.AnalysisResult, error) {
 	var output struct {
-		MatchScore *int `json:"matchScore"`
+		MatchScore        *int      `json:"matchScore"`
+		JobSummary        *string   `json:"jobSummary"`
+		CoreRequirements  *[]string `json:"coreRequirements"`
+		MatchedSkills     *[]string `json:"matchedSkills"`
+		MissingSkills     *[]string `json:"missingSkills"`
+		ResumeSuggestions *[]string `json:"resumeSuggestions"`
+		PreparationTopics *[]string `json:"preparationTopics"`
+		GreetingMessage   *string   `json:"greetingMessage"`
 	}
 	decoder := json.NewDecoder(strings.NewReader(content))
 	decoder.DisallowUnknownFields()
@@ -145,11 +166,22 @@ func decodeAnalysisResult(content string) (analysisdomain.AnalysisResult, error)
 	if err := ensureJSONEnded(decoder); err != nil {
 		return analysisdomain.AnalysisResult{}, errors.Join(port.ErrAIInvalidResponse, err)
 	}
-	if output.MatchScore == nil {
+	if output.MatchScore == nil || output.JobSummary == nil || output.CoreRequirements == nil ||
+		output.MatchedSkills == nil || output.MissingSkills == nil || output.ResumeSuggestions == nil ||
+		output.PreparationTopics == nil || output.GreetingMessage == nil {
 		return analysisdomain.AnalysisResult{}, port.ErrAIInvalidResponse
 	}
 
-	result, err := analysisdomain.NewAnalysisResult(*output.MatchScore)
+	result, err := analysisdomain.NewAnalysisResult(analysisdomain.AnalysisResultParams{
+		MatchScore:        *output.MatchScore,
+		JobSummary:        *output.JobSummary,
+		CoreRequirements:  *output.CoreRequirements,
+		MatchedSkills:     *output.MatchedSkills,
+		MissingSkills:     *output.MissingSkills,
+		ResumeSuggestions: *output.ResumeSuggestions,
+		PreparationTopics: *output.PreparationTopics,
+		GreetingMessage:   *output.GreetingMessage,
+	})
 	if err != nil {
 		return analysisdomain.AnalysisResult{}, errors.Join(port.ErrAIInvalidResponse, err)
 	}

@@ -7,6 +7,7 @@ import (
 	"job-copilot-backend/internal/adapter/ai"
 	"job-copilot-backend/internal/adapter/auth"
 	httpadapter "job-copilot-backend/internal/adapter/http"
+	"job-copilot-backend/internal/adapter/repository"
 	analysisapp "job-copilot-backend/internal/application/analysis"
 	"job-copilot-backend/internal/config"
 	"job-copilot-backend/internal/port"
@@ -34,7 +35,16 @@ func main() {
 		aiClient = configuredAI
 	}
 
-	analyzeJDService, err := analysisapp.NewAnalyzeJDService(aiClient)
+	var analysisRepository port.AnalysisRepository = repository.NewPlaceholderAnalysisRepository()
+	if configuredRepository, err := repository.NewSupabaseAnalysisRepository(
+		appConfig.SupabaseURL,
+		appConfig.SupabaseAnonKey,
+		nil,
+	); err == nil {
+		analysisRepository = configuredRepository
+	}
+
+	analyzeJDService, err := analysisapp.NewAnalyzeJDService(aiClient, analysisRepository)
 	if err != nil {
 		log.Fatalf("初始化 JD 分析服务失败：%v", err)
 	}

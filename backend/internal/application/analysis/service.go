@@ -15,11 +15,13 @@ var (
 )
 
 type AnalyzeJDService struct {
-	aiClient port.AIClient
+	aiClient   port.AIClient
+	repository port.AnalysisRepository
 }
 
 type AnalyzeJDOutput struct {
-	Result analysisdomain.AnalysisResult
+	AnalysisID string
+	Result     analysisdomain.AnalysisResult
 }
 
 type AnalyzeJDCommand struct {
@@ -30,12 +32,15 @@ type AnalyzeJDCommand struct {
 	Skills        []string
 }
 
-func NewAnalyzeJDService(aiClient port.AIClient) (*AnalyzeJDService, error) {
-	if aiClient == nil {
+func NewAnalyzeJDService(
+	aiClient port.AIClient,
+	repository port.AnalysisRepository,
+) (*AnalyzeJDService, error) {
+	if aiClient == nil || repository == nil {
 		return nil, ErrMissingDependency
 	}
 
-	return &AnalyzeJDService{aiClient: aiClient}, nil
+	return &AnalyzeJDService{aiClient: aiClient, repository: repository}, nil
 }
 
 // Execute 只编排当前用例顺序；AI 调用由 Port 的具体 Adapter 执行，持久化在后续阶段接入。
@@ -65,5 +70,10 @@ func (service *AnalyzeJDService) Execute(
 		return AnalyzeJDOutput{}, err
 	}
 
-	return AnalyzeJDOutput{Result: result}, nil
+	analysisID, err := service.repository.Save(ctx, userID, request, result)
+	if err != nil {
+		return AnalyzeJDOutput{}, err
+	}
+
+	return AnalyzeJDOutput{AnalysisID: analysisID, Result: result}, nil
 }

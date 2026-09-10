@@ -14,13 +14,16 @@
 - Go Config、统一 JSON、404 Error Response 和 CORS；
 - 前端健康检查已切换到 Go 的统一响应 Contract；
 - `POST /api/v1/ai/analyze-jd` 的 Gin Handler、Supabase Bearer Token 校验、Application Service 和 OpenAI 兼容 AI Adapter；
-- 8.21 阶段的最小 `matchScore` JSON 解码与 0～100 校验。
+- 8.22 阶段的八字段 Prompt、严格 JSON 解码、结构化结果校验和 AI 异常响应；
+- 使用已配置的真实 LLM 完成过一次无敏感数据的结构化响应验证；
+- `jd_analyses` migration、RLS、最小角色权限、Supabase Repository 和前端真实分析结果页；
+- 使用演示数据完成登录、Go API、真实 LLM、结构校验、数据库写入和结果展示的端到端验收。
 
 尚未真实完成：
 
 - Supabase 真实凭据下的完整认证联调；
 - `profiles` 表、RLS 和个人档案持久化；
-- 真实 LLM 凭据下的 JD API 联调、8.22 完整结构化结果与 `jd_analyses` 持久化；
+- JD 分析历史列表与分析详情恢复；
 - 五轮模拟面试、最终报告和历史恢复；
 - Dashboard、History 真实数据及部署验收。
 
@@ -87,7 +90,7 @@ npm run dev
 - 基础健康检查：<http://localhost:8080/health>
 - V1 API 健康检查：<http://localhost:8080/api/v1/health>
 
-JD 分析接口：`POST http://localhost:8080/api/v1/ai/analyze-jd`（需要 Supabase access token）。
+JD 分析接口：`POST http://localhost:8080/api/v1/ai/analyze-jd`（需要 Supabase access token）。AI 结果通过八字段校验后才会写入 `jd_analyses`。新环境需要先执行 `supabase/migrations/202609090001_create_jd_analyses.sql`。
 
 健康检查响应：
 
@@ -122,7 +125,7 @@ SUPABASE_ANON_KEY=
 AI_API_BASE_URL=
 AI_API_KEY=
 AI_MODEL=
-AI_TIMEOUT_SECONDS=30
+AI_TIMEOUT_SECONDS=90
 ```
 
 `AI_API_BASE_URL` 填 OpenAI 兼容 API 的 `/v1` 基础地址，后端会请求 `/chat/completions`。当认证或 AI 配置缺失时，健康检查仍可启动，业务接口会返回明确的未配置错误，不会生成假结果。

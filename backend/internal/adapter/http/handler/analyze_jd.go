@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -60,11 +61,22 @@ func (handler *AnalyzeJDHandler) Handle(ctx *gin.Context) {
 	}
 
 	response.Success(ctx, gin.H{
-		"matchScore": output.Result.MatchScore(),
+		"analysisId":        output.AnalysisID,
+		"matchScore":        output.Result.MatchScore(),
+		"jobSummary":        output.Result.JobSummary(),
+		"coreRequirements":  output.Result.CoreRequirements(),
+		"matchedSkills":     output.Result.MatchedSkills(),
+		"missingSkills":     output.Result.MissingSkills(),
+		"resumeSuggestions": output.Result.ResumeSuggestions(),
+		"preparationTopics": output.Result.PreparationTopics(),
+		"greetingMessage":   output.Result.GreetingMessage(),
 	})
 }
 
 func handleAnalyzeJDError(ctx *gin.Context, err error) {
+	// 只记录错误链，不记录用户标识、JD、简历、Token 或上游响应体。
+	log.Printf("JD analysis request failed: %v", err)
+
 	switch {
 	case errors.Is(err, analysisdomain.ErrInvalidAnalysisRequest), errors.Is(err, analysisdomain.ErrEmptyJobDescription):
 		response.Error(ctx, http.StatusBadRequest, "INVALID_ARGUMENT", "请检查公司、岗位、JD 和个人经历信息")
@@ -76,6 +88,10 @@ func handleAnalyzeJDError(ctx *gin.Context, err error) {
 		response.Error(ctx, http.StatusBadGateway, "AI_INVALID_RESPONSE", "AI 返回的结果无法使用")
 	case errors.Is(err, port.ErrAIUpstream):
 		response.Error(ctx, http.StatusBadGateway, "AI_UPSTREAM_ERROR", "AI 服务暂时不可用")
+	case errors.Is(err, port.ErrRepositoryUnavailable):
+		response.Error(ctx, http.StatusServiceUnavailable, "DATABASE_NOT_CONFIGURED", "数据存储服务未配置")
+	case errors.Is(err, port.ErrRepositoryOperation):
+		response.Error(ctx, http.StatusBadGateway, "DATABASE_ERROR", "分析结果保存失败，请稍后重试")
 	default:
 		response.Error(ctx, http.StatusInternalServerError, "INTERNAL_ERROR", "分析失败，请稍后重试")
 	}

@@ -41,6 +41,10 @@ func Authenticate(authProvider port.AuthProvider) gin.HandlerFunc {
 		}
 
 		ctx.Set(authenticatedUserIDKey, user.UserID)
+		// Repository 使用已验证的用户令牌访问 Supabase，让数据库 RLS 再执行一层所有权校验。
+		ctx.Request = ctx.Request.WithContext(
+			port.WithAuthenticatedAccessToken(ctx.Request.Context(), parts[1]),
+		)
 		ctx.Next()
 	}
 }

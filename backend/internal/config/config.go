@@ -33,7 +33,7 @@ func Load() Config {
 		AIBaseURL:       getEnv("AI_API_BASE_URL", ""),
 		AIAPIKey:        getEnv("AI_API_KEY", ""),
 		AIModel:         getEnv("AI_MODEL", ""),
-		AITimeout:       time.Duration(getEnvInt("AI_TIMEOUT_SECONDS", 30)) * time.Second,
+		AITimeout:       time.Duration(getEnvInt("AI_TIMEOUT_SECONDS", 90)) * time.Second,
 	}
 }
 
