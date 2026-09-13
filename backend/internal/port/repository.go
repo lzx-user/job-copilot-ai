@@ -24,6 +24,8 @@ type AnalysisRepository interface {
 		result analysisdomain.AnalysisResult,
 	) (analysisID string, err error)
 	FindByID(ctx context.Context, userID string, analysisID string) (analysisdomain.AnalysisResult, error)
+	List(ctx context.Context, userID string, limit int) ([]analysisdomain.AnalysisRecord, error)
+	FindRecordByID(ctx context.Context, userID string, analysisID string) (analysisdomain.AnalysisRecord, error)
 }
 
 // InterviewRepository 只暴露启动面试所需的读取与持久化能力。

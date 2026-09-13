@@ -57,6 +57,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化 JD 分析服务失败：%v", err)
 	}
+	analysisHistoryService, err := analysisapp.NewHistoryService(analysisRepository)
+	if err != nil {
+		log.Fatalf("初始化 JD 历史服务失败：%v", err)
+	}
 	startInterviewService, err := interviewapp.NewStartInterviewService(aiClient, interviewRepository)
 	if err != nil {
 		log.Fatalf("初始化模拟面试服务失败：%v", err)
@@ -76,6 +80,7 @@ func main() {
 	engine := httpadapter.NewRouter(appConfig.FrontendOrigin, httpadapter.Dependencies{
 		AuthProvider:                authProvider,
 		AnalyzeJDService:            analyzeJDService,
+		AnalysisHistoryService:      analysisHistoryService,
 		StartInterviewService:       startInterviewService,
 		ListInterviewOptionsService: listInterviewOptionsService,
 		InterviewTurnService:        interviewTurnService,

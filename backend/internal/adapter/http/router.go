@@ -13,6 +13,7 @@ import (
 type Dependencies struct {
 	AuthProvider                port.AuthProvider
 	AnalyzeJDService            *analysisapp.AnalyzeJDService
+	AnalysisHistoryService      *analysisapp.HistoryService
 	StartInterviewService       *interviewapp.StartInterviewService
 	ListInterviewOptionsService *interviewapp.ListInterviewOptionsService
 	InterviewTurnService        *interviewapp.TurnService
@@ -32,6 +33,9 @@ func NewRouter(frontendOrigin string, dependencies Dependencies) *gin.Engine {
 	aiRoutes := apiV1.Group("/ai")
 	aiRoutes.Use(middleware.Authenticate(dependencies.AuthProvider))
 	aiRoutes.POST("/analyze-jd", handler.NewAnalyzeJDHandler(dependencies.AnalyzeJDService).Handle)
+	analysisHistoryHandler := handler.NewJDAnalysisHistoryHandler(dependencies.AnalysisHistoryService)
+	aiRoutes.GET("/jd-analyses", analysisHistoryHandler.List)
+	aiRoutes.GET("/jd-analyses/:id", analysisHistoryHandler.Get)
 	aiRoutes.GET("/interview/options", handler.NewListInterviewOptionsHandler(dependencies.ListInterviewOptionsService).Handle)
 	aiRoutes.POST("/interview/start", handler.NewStartInterviewHandler(dependencies.StartInterviewService).Handle)
 	aiRoutes.POST("/interview/turn", handler.NewInterviewTurnHandler(dependencies.InterviewTurnService).Handle)
