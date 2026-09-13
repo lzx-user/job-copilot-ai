@@ -20,14 +20,17 @@
 - 使用演示数据完成登录、Go API、真实 LLM、结构校验、数据库写入和结果展示的端到端验收。
 - `interview_sessions`、`interview_messages` migration 与 RLS，以及五轮面试的 Session、Message、Status 领域规则。
 - `POST /api/v1/ai/interview/start` 的鉴权、JD 上下文读取、AI 第一题生成和会话启动持久化代码链路。
+- `profiles` 建表、RLS、最小权限 migration，以及现有档案 Store 的保存、读取、修改和刷新恢复代码链路；
+- JD 分析历史列表、单条详情 API 与真实数据页面；
+- `POST /api/v1/ai/interview/turn` 的回答校验、AI 评分反馈、下一题生成、重复提交保护和原子持久化代码链路；
+- 面试会话读取与对话页刷新恢复代码链路（当前支持第 1～4 轮提交并推进到第 5 轮）。
 
 尚未真实完成：
 
 - Supabase 真实凭据下的完整认证联调；
-- `profiles` 表、RLS 和个人档案持久化；
-- JD 分析历史列表与分析详情恢复；
-- 模拟面试后续轮次 API、页面真实联调、最终报告和历史恢复；
-- Dashboard、History 真实数据及部署验收。
+- 新增 migration 在目标 Supabase 项目的远端执行，以及真实账号下的 Profile、JD 历史、面试单轮完整联调；
+- 第 5 轮回答、最终报告和面试历史列表；
+- 面试历史、Dashboard 真实统计及部署验收。
 
 ## 技术栈
 
@@ -106,7 +109,18 @@ JD 分析接口：`POST http://localhost:8080/api/v1/ai/analyze-jd`（需要 Sup
 
 成功响应的 `data` 包含 `sessionId`、`status`、`currentRound`、`maxRounds` 和 `question`。第一题和 Session 第 1 轮状态通过数据库函数原子保存；AI 失败时不会返回或保存伪造问题。
 
-新环境需要按文件名顺序执行 `supabase/migrations/` 下的 SQL migration。当前尚未完成面试回答、后续轮次和最终报告接口。
+提交面试回答：`POST http://localhost:8080/api/v1/ai/interview/turn`（需要 Supabase access token），请求体为：
+
+```json
+{
+  "sessionId": "当前用户进行中的面试会话 UUID",
+  "answer": "本轮回答"
+}
+```
+
+成功响应包含 `score`、`feedback`、`strengths`、`improvements`、`nextQuestion` 和推进后的轮次。数据库函数会原子保存回答、反馈、下一题与轮次；相同轮次重复提交会返回冲突。`GET /api/v1/ai/interview/sessions/:id` 用于刷新恢复。
+
+JD 历史使用 `GET /api/v1/ai/jd-analyses` 和 `GET /api/v1/ai/jd-analyses/:id`。新环境需要按文件名顺序执行 `supabase/migrations/` 下的 SQL migration。当前尚未完成第 5 轮回答、最终报告和面试历史列表。
 
 健康检查响应：
 
@@ -135,6 +149,7 @@ VITE_SUPABASE_ANON_KEY=
 ```env
 APP_PORT=8080
 APP_ENV=development
+# 多个来源可使用英文逗号分隔；本地地址会自动兼容 localhost、127.0.0.1 和 ::1
 FRONTEND_ORIGIN=http://localhost:5173
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
