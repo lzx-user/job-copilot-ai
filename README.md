@@ -25,13 +25,15 @@
 - `POST /api/v1/ai/interview/turn` 的五轮回答校验、AI 评分反馈、前四轮下一题生成、重复提交保护和原子持久化代码链路；
 - 面试会话读取与对话页刷新恢复代码链路，第 5 轮只保存回答与反馈，不生成第 6 题；
 - 面试 AI 上下文只读取最近 8 条消息，并对 JD、档案、历史消息和当前回答分别限长。
+- `POST /api/v1/ai/interview/report` 的九字段最终报告生成、严格结构校验、报告持久化和 Session 原子完成代码链路；
+- 面试页的报告生成状态、四项评分、总结、优势、不足、推荐复习主题和回答建议展示，以及刷新恢复代码链路。
 
 尚未真实完成：
 
 - Supabase 真实凭据下的完整认证联调；
 - 新增 migration 在目标 Supabase 项目的远端执行，以及真实账号下的 Profile、JD 历史、面试单轮完整联调；
-- 最终报告和面试历史列表；
-- 面试历史、Dashboard 真实统计及部署验收。
+- 面试历史列表；
+- Dashboard 真实统计及部署验收。
 
 ## 技术栈
 
@@ -119,9 +121,19 @@ JD 分析接口：`POST http://localhost:8080/api/v1/ai/analyze-jd`（需要 Sup
 }
 ```
 
-成功响应包含 `score`、`feedback`、`strengths`、`improvements`、`nextQuestion` 和推进后的轮次。第 1～4 轮会原子保存回答、反馈、下一题与新轮次；第 5 轮保存回答和反馈后 `nextQuestion` 为 `null`。相同轮次重复提交会返回冲突。`GET /api/v1/ai/interview/sessions/:id` 用于刷新恢复。Session 会在 8.28 的最终报告成功生成后再标记为 `completed`。
+成功响应包含 `score`、`feedback`、`strengths`、`improvements`、`nextQuestion` 和推进后的轮次。第 1～4 轮会原子保存回答、反馈、下一题与新轮次；第 5 轮保存回答和反馈后 `nextQuestion` 为 `null`。相同轮次重复提交会返回冲突。`GET /api/v1/ai/interview/sessions/:id` 用于刷新恢复。
 
-JD 历史使用 `GET /api/v1/ai/jd-analyses` 和 `GET /api/v1/ai/jd-analyses/:id`。新环境需要按文件名顺序执行 `supabase/migrations/` 下的 SQL migration。当前尚未完成最终报告和面试历史列表。
+生成最终报告：`POST http://localhost:8080/api/v1/ai/interview/report`（需要 Supabase access token），请求体为：
+
+```json
+{
+  "sessionId": "已完成五轮问答的面试会话 UUID"
+}
+```
+
+成功响应包含 `overallScore`、`technicalScore`、`expressionScore`、`projectDepthScore`、`strengths`、`weaknesses`、`recommendedTopics`、`answerTips` 和 `summary`。只有五轮问题、回答和反馈均已持久化后才能生成；报告写入与 Session 标记为 `completed` 通过数据库函数原子完成。重复请求已完成的 Session 会返回已保存报告，不会再次调用模型。
+
+JD 历史使用 `GET /api/v1/ai/jd-analyses` 和 `GET /api/v1/ai/jd-analyses/:id`。新环境需要按文件名顺序执行 `supabase/migrations/` 下的 SQL migration。当前尚未完成面试历史列表。
 
 健康检查响应：
 

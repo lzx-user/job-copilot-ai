@@ -19,4 +19,5 @@ type AIClient interface {
 	AnalyzeJD(ctx context.Context, request analysisdomain.AnalysisRequest) (analysisdomain.AnalysisResult, error)
 	GenerateFirstInterviewQuestion(ctx context.Context, input interviewdomain.InterviewContext) (string, error)
 	EvaluateInterviewAnswer(ctx context.Context, input interviewdomain.InterviewTurnPrompt) (interviewdomain.InterviewTurnResult, error)
+	GenerateInterviewReport(ctx context.Context, input interviewdomain.InterviewReportContext) (interviewdomain.InterviewReport, error)
 }

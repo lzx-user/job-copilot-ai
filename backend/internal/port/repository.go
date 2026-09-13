@@ -39,6 +39,7 @@ type InterviewRepository interface {
 		question interviewdomain.InterviewMessage,
 	) error
 	FindTurnContext(ctx context.Context, userID string, sessionID string) (interviewdomain.InterviewTurnContext, error)
+	FindReportContext(ctx context.Context, userID string, sessionID string) (interviewdomain.InterviewReportContext, error)
 	FindSessionDetail(ctx context.Context, userID string, sessionID string) (interviewdomain.SessionDetail, error)
 	SaveTurn(
 		ctx context.Context,
@@ -46,4 +47,5 @@ type InterviewRepository interface {
 		answer interviewdomain.InterviewMessage,
 		result interviewdomain.InterviewTurnResult,
 	) error
+	SaveReport(ctx context.Context, session interviewdomain.InterviewSession, report interviewdomain.InterviewReport) error
 }

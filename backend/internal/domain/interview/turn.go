@@ -79,6 +79,7 @@ type SessionDetail struct {
 	CompanyName string
 	JobTitle    string
 	Messages    []TranscriptMessage
+	Report      *InterviewReport
 }
 
 type InterviewTurnContext struct {

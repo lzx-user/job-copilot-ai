@@ -38,6 +38,13 @@ func (adapter *PlaceholderAdapter) EvaluateInterviewAnswer(
 	return interviewdomain.InterviewTurnResult{}, port.ErrAIUnavailable
 }
 
+func (adapter *PlaceholderAdapter) GenerateInterviewReport(
+	context.Context,
+	interviewdomain.InterviewReportContext,
+) (interviewdomain.InterviewReport, error) {
+	return interviewdomain.InterviewReport{}, port.ErrAIUnavailable
+}
+
 func (adapter *PlaceholderAdapter) AnalyzeJD(
 	ctx context.Context,
 	_ analysisdomain.AnalysisRequest,

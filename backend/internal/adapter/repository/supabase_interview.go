@@ -283,6 +283,32 @@ func (repository *SupabaseInterviewRepository) FindTurnContext(
 	return interviewdomain.InterviewTurnContext{Session: session, Context: interviewContext, Messages: messages}, nil
 }
 
+func (repository *SupabaseInterviewRepository) FindReportContext(
+	ctx context.Context,
+	userID string,
+	sessionID string,
+) (interviewdomain.InterviewReportContext, error) {
+	session, err := repository.findSession(ctx, userID, sessionID)
+	if err != nil {
+		return interviewdomain.InterviewReportContext{}, err
+	}
+	interviewContext, err := repository.FindContext(ctx, userID, session.AnalysisID())
+	if err != nil {
+		return interviewdomain.InterviewReportContext{}, err
+	}
+	messages, err := repository.findMessages(ctx, userID, sessionID, 10)
+	if err != nil {
+		return interviewdomain.InterviewReportContext{}, err
+	}
+	report, err := repository.findReport(ctx, userID, sessionID)
+	if err != nil {
+		return interviewdomain.InterviewReportContext{}, err
+	}
+	return interviewdomain.InterviewReportContext{
+		Session: session, Context: interviewContext, Messages: messages, Report: report,
+	}, nil
+}
+
 func (repository *SupabaseInterviewRepository) FindSessionDetail(
 	ctx context.Context,
 	userID string,
@@ -300,9 +326,13 @@ func (repository *SupabaseInterviewRepository) FindSessionDetail(
 	if err != nil {
 		return interviewdomain.SessionDetail{}, err
 	}
+	report, err := repository.findReport(ctx, userID, sessionID)
+	if err != nil {
+		return interviewdomain.SessionDetail{}, err
+	}
 	return interviewdomain.SessionDetail{
 		Session: session, CompanyName: interviewContext.CompanyName(),
-		JobTitle: interviewContext.JobTitle(), Messages: messages,
+		JobTitle: interviewContext.JobTitle(), Messages: messages, Report: report,
 	}, nil
 }
 
@@ -364,6 +394,64 @@ func (repository *SupabaseInterviewRepository) SaveTurn(
 		if strings.Contains(errorBody.Message, "interview turn conflict") ||
 			strings.Contains(errorBody.Message, "interview_messages_one_role_per_round_idx") ||
 			httpResponse.StatusCode == http.StatusConflict {
+			return port.ErrRepositoryConflict
+		}
+		return repositoryHTTPError(httpResponse.StatusCode)
+	}
+	return nil
+}
+
+func (repository *SupabaseInterviewRepository) SaveReport(
+	ctx context.Context,
+	session interviewdomain.InterviewSession,
+	report interviewdomain.InterviewReport,
+) error {
+	accessToken, ok := port.AuthenticatedAccessToken(ctx)
+	if !ok {
+		return port.ErrUnauthenticated
+	}
+	if session.ID() == "" || session.Status() != interviewdomain.InterviewStatusCompleted ||
+		session.CurrentRound() != interviewdomain.MaxRounds {
+		return port.ErrRepositoryOperation
+	}
+	body, err := json.Marshal(struct {
+		SessionID         string   `json:"p_session_id"`
+		OverallScore      int      `json:"p_overall_score"`
+		TechnicalScore    int      `json:"p_technical_score"`
+		ExpressionScore   int      `json:"p_expression_score"`
+		ProjectDepthScore int      `json:"p_project_depth_score"`
+		Strengths         []string `json:"p_strengths"`
+		Weaknesses        []string `json:"p_weaknesses"`
+		RecommendedTopics []string `json:"p_recommended_topics"`
+		AnswerTips        []string `json:"p_answer_tips"`
+		Summary           string   `json:"p_summary"`
+	}{
+		SessionID: session.ID(), OverallScore: report.OverallScore(), TechnicalScore: report.TechnicalScore(),
+		ExpressionScore: report.ExpressionScore(), ProjectDepthScore: report.ProjectDepthScore(),
+		Strengths: report.Strengths(), Weaknesses: report.Weaknesses(),
+		RecommendedTopics: report.RecommendedTopics(), AnswerTips: report.AnswerTips(), Summary: report.Summary(),
+	})
+	if err != nil {
+		return errors.Join(port.ErrRepositoryOperation, err)
+	}
+	httpRequest, err := http.NewRequestWithContext(
+		ctx, http.MethodPost, repository.baseURL+"/rpc/complete_interview_report", bytes.NewReader(body),
+	)
+	if err != nil {
+		return errors.Join(port.ErrRepositoryOperation, err)
+	}
+	repository.setHeaders(httpRequest, accessToken)
+	httpResponse, err := repository.httpClient.Do(httpRequest)
+	if err != nil {
+		return errors.Join(port.ErrRepositoryOperation, err)
+	}
+	defer httpResponse.Body.Close()
+	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
+		var errorBody struct {
+			Message string `json:"message"`
+		}
+		_ = json.NewDecoder(httpResponse.Body).Decode(&errorBody)
+		if strings.Contains(errorBody.Message, "interview report conflict") || httpResponse.StatusCode == http.StatusConflict {
 			return port.ErrRepositoryConflict
 		}
 		return repositoryHTTPError(httpResponse.StatusCode)
@@ -480,6 +568,66 @@ func (repository *SupabaseInterviewRepository) findMessages(
 		})
 	}
 	return messages, nil
+}
+
+func (repository *SupabaseInterviewRepository) findReport(
+	ctx context.Context,
+	userID, sessionID string,
+) (*interviewdomain.InterviewReport, error) {
+	accessToken, ok := port.AuthenticatedAccessToken(ctx)
+	if !ok {
+		return nil, port.ErrUnauthenticated
+	}
+	query := url.Values{}
+	query.Set("session_id", "eq."+sessionID)
+	query.Set("user_id", "eq."+userID)
+	query.Set("select", "overall_score,technical_score,expression_score,project_depth_score,strengths,weaknesses,recommended_topics,answer_tips,summary")
+	httpRequest, err := http.NewRequestWithContext(
+		ctx, http.MethodGet, repository.baseURL+"/interview_reports?"+query.Encode(), nil,
+	)
+	if err != nil {
+		return nil, errors.Join(port.ErrRepositoryOperation, err)
+	}
+	repository.setHeaders(httpRequest, accessToken)
+	httpResponse, err := repository.httpClient.Do(httpRequest)
+	if err != nil {
+		return nil, errors.Join(port.ErrRepositoryOperation, err)
+	}
+	defer httpResponse.Body.Close()
+	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
+		return nil, repositoryHTTPError(httpResponse.StatusCode)
+	}
+	var rows []struct {
+		OverallScore      int      `json:"overall_score"`
+		TechnicalScore    int      `json:"technical_score"`
+		ExpressionScore   int      `json:"expression_score"`
+		ProjectDepthScore int      `json:"project_depth_score"`
+		Strengths         []string `json:"strengths"`
+		Weaknesses        []string `json:"weaknesses"`
+		RecommendedTopics []string `json:"recommended_topics"`
+		AnswerTips        []string `json:"answer_tips"`
+		Summary           string   `json:"summary"`
+	}
+	if err := json.NewDecoder(httpResponse.Body).Decode(&rows); err != nil {
+		return nil, errors.Join(port.ErrRepositoryOperation, err)
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	if len(rows) != 1 {
+		return nil, port.ErrRepositoryOperation
+	}
+	row := rows[0]
+	report, err := interviewdomain.NewInterviewReport(interviewdomain.InterviewReportParams{
+		OverallScore: row.OverallScore, TechnicalScore: row.TechnicalScore,
+		ExpressionScore: row.ExpressionScore, ProjectDepthScore: row.ProjectDepthScore,
+		Strengths: row.Strengths, Weaknesses: row.Weaknesses,
+		RecommendedTopics: row.RecommendedTopics, AnswerTips: row.AnswerTips, Summary: row.Summary,
+	})
+	if err != nil {
+		return nil, errors.Join(port.ErrRepositoryOperation, err)
+	}
+	return &report, nil
 }
 
 func (repository *SupabaseInterviewRepository) setHeaders(request *http.Request, accessToken string) {

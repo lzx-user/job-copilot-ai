@@ -77,6 +77,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化面试会话服务失败：%v", err)
 	}
+	interviewReportService, err := interviewapp.NewReportService(aiClient, interviewRepository)
+	if err != nil {
+		log.Fatalf("初始化面试报告服务失败：%v", err)
+	}
 	engine := httpadapter.NewRouter(appConfig.FrontendOrigin, httpadapter.Dependencies{
 		AuthProvider:                authProvider,
 		AnalyzeJDService:            analyzeJDService,
@@ -85,6 +89,7 @@ func main() {
 		ListInterviewOptionsService: listInterviewOptionsService,
 		InterviewTurnService:        interviewTurnService,
 		InterviewSessionService:     interviewSessionService,
+		InterviewReportService:      interviewReportService,
 	})
 	address := ":" + appConfig.AppPort
 

@@ -54,6 +54,14 @@ func (repository *PlaceholderInterviewRepository) FindTurnContext(
 	return interviewdomain.InterviewTurnContext{}, port.ErrRepositoryUnavailable
 }
 
+func (repository *PlaceholderInterviewRepository) FindReportContext(
+	context.Context,
+	string,
+	string,
+) (interviewdomain.InterviewReportContext, error) {
+	return interviewdomain.InterviewReportContext{}, port.ErrRepositoryUnavailable
+}
+
 func (repository *PlaceholderInterviewRepository) FindSessionDetail(
 	context.Context,
 	string,
@@ -67,6 +75,14 @@ func (repository *PlaceholderInterviewRepository) SaveTurn(
 	interviewdomain.InterviewSession,
 	interviewdomain.InterviewMessage,
 	interviewdomain.InterviewTurnResult,
+) error {
+	return port.ErrRepositoryUnavailable
+}
+
+func (repository *PlaceholderInterviewRepository) SaveReport(
+	context.Context,
+	interviewdomain.InterviewSession,
+	interviewdomain.InterviewReport,
 ) error {
 	return port.ErrRepositoryUnavailable
 }

@@ -1,6 +1,7 @@
 import type { ApiResponse } from '../types/api'
 import type {
   InterviewOptionsResult,
+  InterviewReportResult,
   InterviewSessionDetail,
   InterviewTurnResult,
   StartInterviewResult,
@@ -21,6 +22,15 @@ export async function submitInterviewTurn(sessionId: string, answer: string): Pr
   const response = await request.post<ApiResponse<InterviewTurnResult>>(
     '/ai/interview/turn',
     { sessionId, answer },
+    { timeout: 100_000 },
+  )
+  return response.data.data
+}
+
+export async function generateInterviewReport(sessionId: string): Promise<InterviewReportResult> {
+  const response = await request.post<ApiResponse<InterviewReportResult>>(
+    '/ai/interview/report',
+    { sessionId },
     { timeout: 100_000 },
   )
   return response.data.data

@@ -41,6 +41,7 @@ export interface InterviewSessionDetail {
   companyName: string
   jobTitle: string
   messages: InterviewMessage[]
+  report: InterviewReport | null
 }
 
 export interface InterviewTurnResult extends InterviewFeedback {
@@ -48,4 +49,21 @@ export interface InterviewTurnResult extends InterviewFeedback {
   currentRound: number
   maxRounds: number
   nextQuestion: string | null
+}
+
+export interface InterviewReport {
+  overallScore: number
+  technicalScore: number
+  expressionScore: number
+  projectDepthScore: number
+  strengths: string[]
+  weaknesses: string[]
+  recommendedTopics: string[]
+  answerTips: string[]
+  summary: string
+}
+
+export interface InterviewReportResult extends InterviewReport {
+  sessionId: string
+  status: 'completed'
 }

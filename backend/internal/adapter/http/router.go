@@ -18,6 +18,7 @@ type Dependencies struct {
 	ListInterviewOptionsService *interviewapp.ListInterviewOptionsService
 	InterviewTurnService        *interviewapp.TurnService
 	InterviewSessionService     *interviewapp.SessionService
+	InterviewReportService      *interviewapp.ReportService
 }
 
 func NewRouter(frontendOrigin string, dependencies Dependencies) *gin.Engine {
@@ -39,6 +40,7 @@ func NewRouter(frontendOrigin string, dependencies Dependencies) *gin.Engine {
 	aiRoutes.GET("/interview/options", handler.NewListInterviewOptionsHandler(dependencies.ListInterviewOptionsService).Handle)
 	aiRoutes.POST("/interview/start", handler.NewStartInterviewHandler(dependencies.StartInterviewService).Handle)
 	aiRoutes.POST("/interview/turn", handler.NewInterviewTurnHandler(dependencies.InterviewTurnService).Handle)
+	aiRoutes.POST("/interview/report", handler.NewInterviewReportHandler(dependencies.InterviewReportService).Handle)
 	aiRoutes.GET("/interview/sessions/:id", handler.NewInterviewSessionHandler(dependencies.InterviewSessionService).Get)
 
 	engine.NoRoute(handler.NotFound)

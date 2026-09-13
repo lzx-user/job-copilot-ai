@@ -52,9 +52,14 @@ func (handler *InterviewSessionHandler) Get(ctx *gin.Context) {
 		}
 		messages = append(messages, item)
 	}
-	response.Success(ctx, gin.H{
+	data := gin.H{
 		"sessionId": detail.Session.ID(), "status": detail.Session.Status(),
 		"currentRound": detail.Session.CurrentRound(), "maxRounds": detail.Session.MaxRounds(),
 		"companyName": detail.CompanyName, "jobTitle": detail.JobTitle, "messages": messages,
-	})
+		"report": nil,
+	}
+	if detail.Report != nil {
+		data["report"] = interviewReportData(*detail.Report)
+	}
+	response.Success(ctx, data)
 }
