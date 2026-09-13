@@ -3,6 +3,10 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 // Vite 只会把 VITE_ 前缀的变量暴露给浏览器，所以这里显式读取这两个公开配置。
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim()
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
+const supabaseClientUrl =
+  import.meta.env.DEV && typeof window !== 'undefined'
+    ? `${window.location.origin}/supabase`
+    : supabaseUrl
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
 
@@ -12,7 +16,7 @@ export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
  * 因此后续创建业务表时，必须为每张表开启 RLS 并编写“只访问本人数据”的策略。
  */
 export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl as string, supabaseAnonKey as string, {
+  ? createClient(supabaseClientUrl as string, supabaseAnonKey as string, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
@@ -20,4 +24,3 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
       },
     })
   : null
-
