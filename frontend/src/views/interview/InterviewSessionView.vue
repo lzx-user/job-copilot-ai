@@ -24,9 +24,13 @@ const latestFeedback = computed<InterviewFeedback | null>(() => {
   return { score: message.score, feedback: message.feedback, strengths: message.strengths, improvements: message.improvements }
 })
 
+const currentRoundAnswered = computed(() => Boolean(session.value?.messages.some(
+  (message) => message.role === 'candidate' && message.round === session.value?.currentRound,
+)))
+
 const canSubmit = computed(() => Boolean(
   session.value?.status === 'in_progress' &&
-  session.value.currentRound < session.value.maxRounds &&
+  !currentRoundAnswered.value &&
   answer.value.trim() && !submitting.value,
 ))
 
@@ -92,9 +96,10 @@ onMounted(loadSession)
                 <div><small>第 {{ message.round }} 轮 · {{ message.role === 'interviewer' ? '面试官' : '候选人' }}</small><p>{{ message.content }}</p></div>
               </article>
             </div>
-            <el-alert v-if="session.currentRound >= session.maxRounds" title="已到第 5 轮；最终回答与面试报告将在下一阶段接入。" type="info" :closable="false" show-icon />
+            <el-alert v-if="currentRoundAnswered && session.currentRound === session.maxRounds" title="5 轮问答已全部完成并保存；最终报告将在下一阶段接入。" type="success" :closable="false" show-icon />
+            <el-alert v-else-if="session.currentRound === session.maxRounds" title="已进入第 5 轮，提交本轮回答后将不再生成下一题。" type="info" :closable="false" show-icon />
             <div class="answer-box">
-              <el-input v-model="answer" type="textarea" :rows="4" maxlength="10000" show-word-limit :disabled="session.currentRound >= session.maxRounds" placeholder="输入本轮回答，建议用 STAR 结构说明背景、行动和结果" @keydown.ctrl.enter="handleSubmit" />
+              <el-input v-model="answer" type="textarea" :rows="4" maxlength="10000" show-word-limit :disabled="session.status !== 'in_progress' || currentRoundAnswered" placeholder="输入本轮回答，建议用 STAR 结构说明背景、行动和结果" @keydown.ctrl.enter="handleSubmit" />
               <el-button class="gradient-button" :icon="Promotion" :loading="submitting" :disabled="!canSubmit" @click="handleSubmit">提交回答</el-button>
             </div>
           </section>

@@ -47,5 +47,5 @@ export interface InterviewTurnResult extends InterviewFeedback {
   sessionId: string
   currentRound: number
   maxRounds: number
-  nextQuestion: string
+  nextQuestion: string | null
 }

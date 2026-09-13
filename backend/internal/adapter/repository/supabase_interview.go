@@ -316,14 +316,23 @@ func (repository *SupabaseInterviewRepository) SaveTurn(
 	if !ok {
 		return port.ErrUnauthenticated
 	}
-	expectedRound := session.CurrentRound() - 1
-	if expectedRound < 1 || expectedRound > 4 || answer.Round() != expectedRound ||
+	expectedRound := answer.Round()
+	isContinuingTurn := expectedRound < interviewdomain.MaxRounds &&
+		session.CurrentRound() == expectedRound+1 && result.HasNextQuestion()
+	isFinalTurn := expectedRound == interviewdomain.MaxRounds &&
+		session.CurrentRound() == interviewdomain.MaxRounds && !result.HasNextQuestion()
+	if (!isContinuingTurn && !isFinalTurn) ||
 		answer.SessionID() != session.ID() || answer.UserID() != session.UserID() ||
 		answer.Role() != interviewdomain.InterviewMessageRoleCandidate ||
 		session.Status() != interviewdomain.InterviewStatusInProgress {
 		return port.ErrRepositoryOperation
 	}
 	feedback := result.Feedback()
+	var nextQuestion *string
+	if result.HasNextQuestion() {
+		value := result.NextQuestion()
+		nextQuestion = &value
+	}
 	body, err := json.Marshal(struct {
 		SessionID     string   `json:"p_session_id"`
 		ExpectedRound int      `json:"p_expected_round"`
@@ -332,8 +341,8 @@ func (repository *SupabaseInterviewRepository) SaveTurn(
 		Feedback      string   `json:"p_feedback"`
 		Strengths     []string `json:"p_strengths"`
 		Improvements  []string `json:"p_improvements"`
-		NextQuestion  string   `json:"p_next_question"`
-	}{session.ID(), expectedRound, answer.Content(), feedback.Score(), feedback.Feedback(), feedback.Strengths(), feedback.Improvements(), result.NextQuestion()})
+		NextQuestion  *string  `json:"p_next_question"`
+	}{session.ID(), expectedRound, answer.Content(), feedback.Score(), feedback.Feedback(), feedback.Strengths(), feedback.Improvements(), nextQuestion})
 	if err != nil {
 		return errors.Join(port.ErrRepositoryOperation, err)
 	}
@@ -352,7 +361,9 @@ func (repository *SupabaseInterviewRepository) SaveTurn(
 			Message string `json:"message"`
 		}
 		_ = json.NewDecoder(httpResponse.Body).Decode(&errorBody)
-		if strings.Contains(errorBody.Message, "interview turn conflict") || httpResponse.StatusCode == http.StatusConflict {
+		if strings.Contains(errorBody.Message, "interview turn conflict") ||
+			strings.Contains(errorBody.Message, "interview_messages_one_role_per_round_idx") ||
+			httpResponse.StatusCode == http.StatusConflict {
 			return port.ErrRepositoryConflict
 		}
 		return repositoryHTTPError(httpResponse.StatusCode)

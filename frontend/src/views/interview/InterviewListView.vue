@@ -65,7 +65,7 @@ onMounted(loadOptions)
   <div class="page-shell">
     <div class="page-heading">
       <div><span class="section-label">MOCK INTERVIEW</span><h1>模拟面试</h1><p>选择已保存的 JD，由 AI 生成第一道针对性面试题。</p></div>
-      <el-tag effect="plain" round>固定 5 轮 · 单轮问答已接入</el-tag>
+      <el-tag effect="plain" round>固定 5 轮 · 可刷新恢复</el-tag>
     </div>
 
     <section class="panel intro-panel">

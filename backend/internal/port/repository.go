@@ -28,7 +28,7 @@ type AnalysisRepository interface {
 	FindRecordByID(ctx context.Context, userID string, analysisID string) (analysisdomain.AnalysisRecord, error)
 }
 
-// InterviewRepository 只暴露启动面试所需的读取与持久化能力。
+// InterviewRepository 只暴露五轮面试启动、恢复与持久化所需的能力。
 type InterviewRepository interface {
 	ListOptions(ctx context.Context, userID string) ([]interviewdomain.InterviewOption, error)
 	FindContext(ctx context.Context, userID string, analysisID string) (interviewdomain.InterviewContext, error)

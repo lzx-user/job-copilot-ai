@@ -45,10 +45,14 @@ func (handler *InterviewTurnHandler) Handle(ctx *gin.Context) {
 		return
 	}
 	feedback := output.Result.Feedback()
+	var nextQuestion any
+	if output.Result.HasNextQuestion() {
+		nextQuestion = output.Result.NextQuestion()
+	}
 	response.Success(ctx, gin.H{
 		"sessionId": output.SessionID, "currentRound": output.CurrentRound, "maxRounds": output.MaxRounds,
 		"score": feedback.Score(), "feedback": feedback.Feedback(), "strengths": feedback.Strengths(),
-		"improvements": feedback.Improvements(), "nextQuestion": output.Result.NextQuestion(),
+		"improvements": feedback.Improvements(), "nextQuestion": nextQuestion,
 	})
 }
 

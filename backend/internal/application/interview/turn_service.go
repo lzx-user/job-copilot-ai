@@ -50,12 +50,13 @@ func (service *TurnService) Execute(ctx context.Context, userID string, command 
 	if err != nil {
 		return TurnOutput{}, err
 	}
-	// 8.26 只推进需要生成下一题的第 1～4 轮；第 5 轮最终报告在下一阶段完成。
-	if !turnContext.Session.CanContinue() {
+	if !turnContext.Session.CanAcceptAnswer() || hasCandidateAnswer(turnContext.Messages, turnContext.Session.CurrentRound()) {
 		return TurnOutput{}, ErrInterviewTurnUnavailable
 	}
+	generateNextQuestion := turnContext.Session.CanContinue()
 	result, err := service.aiClient.EvaluateInterviewAnswer(ctx, interviewdomain.InterviewTurnPrompt{
 		Context: turnContext.Context, Messages: turnContext.Messages, Answer: answerContent,
+		GenerateNextQuestion: generateNextQuestion,
 	})
 	if err != nil {
 		return TurnOutput{}, err
@@ -68,8 +69,10 @@ func (service *TurnService) Execute(ctx context.Context, userID string, command 
 	if err != nil {
 		return TurnOutput{}, err
 	}
-	if err := turnContext.Session.AdvanceRound(); err != nil {
-		return TurnOutput{}, ErrInterviewTurnUnavailable
+	if generateNextQuestion {
+		if err := turnContext.Session.AdvanceRound(); err != nil {
+			return TurnOutput{}, ErrInterviewTurnUnavailable
+		}
 	}
 	if err := service.repository.SaveTurn(ctx, turnContext.Session, answer, result); err != nil {
 		return TurnOutput{}, err
@@ -78,4 +81,13 @@ func (service *TurnService) Execute(ctx context.Context, userID string, command 
 		SessionID: sessionID, CurrentRound: turnContext.Session.CurrentRound(),
 		MaxRounds: turnContext.Session.MaxRounds(), Result: result,
 	}, nil
+}
+
+func hasCandidateAnswer(messages []interviewdomain.TranscriptMessage, round int) bool {
+	for _, message := range messages {
+		if message.Role == interviewdomain.InterviewMessageRoleCandidate && message.Round == round {
+			return true
+		}
+	}
+	return false
 }

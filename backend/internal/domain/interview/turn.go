@@ -60,6 +60,11 @@ func NewInterviewTurnResult(feedback InterviewFeedback, nextQuestion string) (In
 	return InterviewTurnResult{feedback: feedback, nextQuestion: nextQuestion}, nil
 }
 
+// NewFinalInterviewTurnResult 表示第 5 轮只保存评价，不生成超出上限的第 6 题。
+func NewFinalInterviewTurnResult(feedback InterviewFeedback) InterviewTurnResult {
+	return InterviewTurnResult{feedback: feedback}
+}
+
 type TranscriptMessage struct {
 	ID        string
 	Role      InterviewMessageRole
@@ -83,9 +88,10 @@ type InterviewTurnContext struct {
 }
 
 type InterviewTurnPrompt struct {
-	Context  InterviewContext
-	Messages []TranscriptMessage
-	Answer   string
+	Context              InterviewContext
+	Messages             []TranscriptMessage
+	Answer               string
+	GenerateNextQuestion bool
 }
 
 func (feedback InterviewFeedback) Score() int       { return feedback.score }
@@ -98,3 +104,4 @@ func (feedback InterviewFeedback) Improvements() []string {
 }
 func (result InterviewTurnResult) Feedback() InterviewFeedback { return result.feedback }
 func (result InterviewTurnResult) NextQuestion() string        { return result.nextQuestion }
+func (result InterviewTurnResult) HasNextQuestion() bool       { return result.nextQuestion != "" }

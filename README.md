@@ -22,14 +22,15 @@
 - `POST /api/v1/ai/interview/start` 的鉴权、JD 上下文读取、AI 第一题生成和会话启动持久化代码链路。
 - `profiles` 建表、RLS、最小权限 migration，以及现有档案 Store 的保存、读取、修改和刷新恢复代码链路；
 - JD 分析历史列表、单条详情 API 与真实数据页面；
-- `POST /api/v1/ai/interview/turn` 的回答校验、AI 评分反馈、下一题生成、重复提交保护和原子持久化代码链路；
-- 面试会话读取与对话页刷新恢复代码链路（当前支持第 1～4 轮提交并推进到第 5 轮）。
+- `POST /api/v1/ai/interview/turn` 的五轮回答校验、AI 评分反馈、前四轮下一题生成、重复提交保护和原子持久化代码链路；
+- 面试会话读取与对话页刷新恢复代码链路，第 5 轮只保存回答与反馈，不生成第 6 题；
+- 面试 AI 上下文只读取最近 8 条消息，并对 JD、档案、历史消息和当前回答分别限长。
 
 尚未真实完成：
 
 - Supabase 真实凭据下的完整认证联调；
 - 新增 migration 在目标 Supabase 项目的远端执行，以及真实账号下的 Profile、JD 历史、面试单轮完整联调；
-- 第 5 轮回答、最终报告和面试历史列表；
+- 最终报告和面试历史列表；
 - 面试历史、Dashboard 真实统计及部署验收。
 
 ## 技术栈
@@ -118,9 +119,9 @@ JD 分析接口：`POST http://localhost:8080/api/v1/ai/analyze-jd`（需要 Sup
 }
 ```
 
-成功响应包含 `score`、`feedback`、`strengths`、`improvements`、`nextQuestion` 和推进后的轮次。数据库函数会原子保存回答、反馈、下一题与轮次；相同轮次重复提交会返回冲突。`GET /api/v1/ai/interview/sessions/:id` 用于刷新恢复。
+成功响应包含 `score`、`feedback`、`strengths`、`improvements`、`nextQuestion` 和推进后的轮次。第 1～4 轮会原子保存回答、反馈、下一题与新轮次；第 5 轮保存回答和反馈后 `nextQuestion` 为 `null`。相同轮次重复提交会返回冲突。`GET /api/v1/ai/interview/sessions/:id` 用于刷新恢复。Session 会在 8.28 的最终报告成功生成后再标记为 `completed`。
 
-JD 历史使用 `GET /api/v1/ai/jd-analyses` 和 `GET /api/v1/ai/jd-analyses/:id`。新环境需要按文件名顺序执行 `supabase/migrations/` 下的 SQL migration。当前尚未完成第 5 轮回答、最终报告和面试历史列表。
+JD 历史使用 `GET /api/v1/ai/jd-analyses` 和 `GET /api/v1/ai/jd-analyses/:id`。新环境需要按文件名顺序执行 `supabase/migrations/` 下的 SQL migration。当前尚未完成最终报告和面试历史列表。
 
 健康检查响应：
 
