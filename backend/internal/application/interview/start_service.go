@@ -61,6 +61,11 @@ func (service *StartInterviewService) Execute(
 	if err != nil {
 		return StartInterviewOutput{}, err
 	}
+	// 先生成并校验第一题，避免上游失败时留下无法使用的 pending 会话。
+	questionContent, err := service.aiClient.GenerateFirstInterviewQuestion(ctx, interviewContext)
+	if err != nil {
+		return StartInterviewOutput{}, err
+	}
 	sessionID, err := service.repository.CreatePendingSession(ctx, userID, analysisID)
 	if err != nil {
 		return StartInterviewOutput{}, err
@@ -77,10 +82,6 @@ func (service *StartInterviewService) Execute(
 		return StartInterviewOutput{}, err
 	}
 
-	questionContent, err := service.aiClient.GenerateFirstInterviewQuestion(ctx, interviewContext)
-	if err != nil {
-		return StartInterviewOutput{}, err
-	}
 	if err := pendingSession.Start(); err != nil {
 		return StartInterviewOutput{}, err
 	}

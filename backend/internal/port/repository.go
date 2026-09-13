@@ -12,6 +12,7 @@ var (
 	ErrRepositoryUnavailable = errors.New("repository unavailable")
 	ErrRepositoryOperation   = errors.New("repository operation failed")
 	ErrRepositoryNotFound    = errors.New("repository record not found")
+	ErrRepositoryConflict    = errors.New("repository conflict")
 )
 
 // AnalysisRepository 描述核心业务需要的分析结果持久化能力。
@@ -34,5 +35,13 @@ type InterviewRepository interface {
 		ctx context.Context,
 		session interviewdomain.InterviewSession,
 		question interviewdomain.InterviewMessage,
+	) error
+	FindTurnContext(ctx context.Context, userID string, sessionID string) (interviewdomain.InterviewTurnContext, error)
+	FindSessionDetail(ctx context.Context, userID string, sessionID string) (interviewdomain.SessionDetail, error)
+	SaveTurn(
+		ctx context.Context,
+		session interviewdomain.InterviewSession,
+		answer interviewdomain.InterviewMessage,
+		result interviewdomain.InterviewTurnResult,
 	) error
 }

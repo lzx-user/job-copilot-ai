@@ -3,9 +3,10 @@ import { Briefcase, ChatDotRound, Microphone, Reading } from '@element-plus/icon
 import { ElMessage } from 'element-plus'
 import type { Component } from 'vue'
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { listInterviewOptions, startInterview } from '../../api/interview.api'
 import AppEmpty from '../../components/common/AppEmpty.vue'
-import type { InterviewOption, StartInterviewResult } from '../../types/interview'
+import type { InterviewOption } from '../../types/interview'
 import { toUserMessage } from '../../utils/error'
 
 interface InterviewMode {
@@ -21,12 +22,13 @@ const modes: InterviewMode[] = [
   { title: '综合面', description: '兼顾经历表达、岗位动机与协作思考', icon: ChatDotRound, tone: 'green' },
 ]
 
+const router = useRouter()
+
 const options = ref<InterviewOption[]>([])
 const selectedAnalysisId = ref('')
 const loadingOptions = ref(true)
 const starting = ref(false)
 const loadError = ref('')
-const startResult = ref<StartInterviewResult | null>(null)
 
 async function loadOptions() {
   loadingOptions.value = true
@@ -45,10 +47,10 @@ async function loadOptions() {
 async function handleStart() {
   if (!selectedAnalysisId.value || starting.value) return
   starting.value = true
-  startResult.value = null
   try {
-    startResult.value = await startInterview(selectedAnalysisId.value)
+    const result = await startInterview(selectedAnalysisId.value)
     ElMessage.success('模拟面试已开始，第一题已保存')
+    await router.push({ name: 'interview-session', params: { id: result.sessionId } })
   } catch (error) {
     ElMessage.error(toUserMessage(error))
   } finally {
@@ -63,14 +65,14 @@ onMounted(loadOptions)
   <div class="page-shell">
     <div class="page-heading">
       <div><span class="section-label">MOCK INTERVIEW</span><h1>模拟面试</h1><p>选择已保存的 JD，由 AI 生成第一道针对性面试题。</p></div>
-      <el-tag effect="plain" round>固定 5 轮 · 第 1 轮已接入</el-tag>
+      <el-tag effect="plain" round>固定 5 轮 · 单轮问答已接入</el-tag>
     </div>
 
     <section class="panel intro-panel">
       <div class="intro-copy">
         <span class="intro-badge"><el-icon><Reading /></el-icon> 面试准备流程</span>
         <h2>选择合适的练习方式，<br /><em>每次只聚焦一个目标。</em></h2>
-        <p>当前阶段会创建真实会话并保存第一题；回答评分与后续轮次将在下一阶段接入。</p>
+        <p>创建会话后进入对话页，可提交回答并获得评分、反馈与下一题。</p>
       </div>
       <div class="interview-visual" aria-hidden="true"><span>AI</span><i /><b>•••</b></div>
     </section>
@@ -110,12 +112,6 @@ onMounted(loadOptions)
         {{ starting ? 'AI 正在生成第一题…' : '开始模拟面试' }}
       </el-button>
 
-      <section v-if="startResult" class="first-question">
-        <div><span>第 {{ startResult.currentRound }} / {{ startResult.maxRounds }} 轮</span><el-tag type="success">已保存</el-tag></div>
-        <h3>面试官</h3>
-        <p>{{ startResult.question }}</p>
-        <small>Session：{{ startResult.sessionId }}</small>
-      </section>
     </section>
   </div>
 </template>
@@ -146,11 +142,6 @@ onMounted(loadOptions)
 .jd-option-title { color: var(--text-primary); font-weight: 600; }
 .jd-option-score { color: var(--color-primary); font-size: 13px; }
 .start-button { width: 100%; height: 44px; margin-top: 18px; }
-.first-question { margin-top: 20px; padding: 20px; border: 1px solid #c9eadc; border-radius: 14px; background: #f3fbf7; }
-.first-question > div { display: flex; align-items: center; justify-content: space-between; }
-.first-question h3 { margin: 16px 0 8px; }
-.first-question p { margin: 0; color: var(--text-regular); line-height: 1.8; }
-.first-question small { display: block; margin-top: 14px; color: var(--text-secondary); word-break: break-all; }
 @media (max-width: 1000px) { .mode-grid { grid-template-columns: 1fr; } }
 @media (max-width: 767px) { .intro-panel { min-height: 250px; padding: 24px; } .interview-visual { right: -70px; opacity: .35; } .mode-card { grid-template-columns: 50px 1fr; } .mode-card .el-radio { grid-column: 2; } .jd-selector { padding: 18px; } }
 </style>

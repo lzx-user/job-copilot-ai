@@ -31,6 +31,13 @@ func (adapter *PlaceholderAdapter) GenerateFirstInterviewQuestion(
 	return "", errors.Join(port.ErrAIUnavailable, ErrClientNotConfigured)
 }
 
+func (adapter *PlaceholderAdapter) EvaluateInterviewAnswer(
+	context.Context,
+	interviewdomain.InterviewTurnPrompt,
+) (interviewdomain.InterviewTurnResult, error) {
+	return interviewdomain.InterviewTurnResult{}, port.ErrAIUnavailable
+}
+
 func (adapter *PlaceholderAdapter) AnalyzeJD(
 	ctx context.Context,
 	_ analysisdomain.AnalysisRequest,
