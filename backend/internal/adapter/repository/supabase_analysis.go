@@ -46,20 +46,22 @@ func NewSupabaseAnalysisRepository(
 }
 
 type analysisRow struct {
-	UserID            string   `json:"user_id"`
-	CompanyName       string   `json:"company_name"`
-	JobTitle          string   `json:"job_title"`
-	JDContent         string   `json:"jd_content"`
-	ResumeSummary     string   `json:"resume_summary"`
-	Skills            []string `json:"skills"`
-	MatchScore        int      `json:"match_score"`
-	JobSummary        string   `json:"job_summary"`
-	CoreRequirements  []string `json:"core_requirements"`
-	MatchedSkills     []string `json:"matched_skills"`
-	MissingSkills     []string `json:"missing_skills"`
-	ResumeSuggestions []string `json:"resume_suggestions"`
-	PreparationTopics []string `json:"preparation_topics"`
-	GreetingMessage   string   `json:"greeting_message"`
+	ID                string    `json:"id"`
+	UserID            string    `json:"user_id"`
+	CompanyName       string    `json:"company_name"`
+	JobTitle          string    `json:"job_title"`
+	JDContent         string    `json:"jd_content"`
+	ResumeSummary     string    `json:"resume_summary"`
+	Skills            []string  `json:"skills"`
+	MatchScore        int       `json:"match_score"`
+	JobSummary        string    `json:"job_summary"`
+	CoreRequirements  []string  `json:"core_requirements"`
+	MatchedSkills     []string  `json:"matched_skills"`
+	MissingSkills     []string  `json:"missing_skills"`
+	ResumeSuggestions []string  `json:"resume_suggestions"`
+	PreparationTopics []string  `json:"preparation_topics"`
+	GreetingMessage   string    `json:"greeting_message"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 func (repository *SupabaseAnalysisRepository) Save(
@@ -124,6 +126,89 @@ func (repository *SupabaseAnalysisRepository) Save(
 	}
 
 	return rows[0].ID, nil
+}
+
+func (repository *SupabaseAnalysisRepository) List(
+	ctx context.Context,
+	userID string,
+	limit int,
+) ([]analysisdomain.AnalysisRecord, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	query := url.Values{}
+	query.Set("user_id", "eq."+userID)
+	query.Set("select", "id,company_name,job_title,match_score,job_summary,core_requirements,matched_skills,missing_skills,resume_suggestions,preparation_topics,greeting_message,created_at")
+	query.Set("order", "created_at.desc")
+	query.Set("limit", fmt.Sprint(limit))
+	return repository.findRecords(ctx, query)
+}
+
+func (repository *SupabaseAnalysisRepository) FindRecordByID(
+	ctx context.Context,
+	userID string,
+	analysisID string,
+) (analysisdomain.AnalysisRecord, error) {
+	query := url.Values{}
+	query.Set("id", "eq."+analysisID)
+	query.Set("user_id", "eq."+userID)
+	query.Set("select", "id,company_name,job_title,match_score,job_summary,core_requirements,matched_skills,missing_skills,resume_suggestions,preparation_topics,greeting_message,created_at")
+	records, err := repository.findRecords(ctx, query)
+	if err != nil {
+		return analysisdomain.AnalysisRecord{}, err
+	}
+	if len(records) == 0 {
+		return analysisdomain.AnalysisRecord{}, port.ErrRepositoryNotFound
+	}
+	if len(records) != 1 {
+		return analysisdomain.AnalysisRecord{}, port.ErrRepositoryOperation
+	}
+	return records[0], nil
+}
+
+func (repository *SupabaseAnalysisRepository) findRecords(
+	ctx context.Context,
+	query url.Values,
+) ([]analysisdomain.AnalysisRecord, error) {
+	accessToken, ok := port.AuthenticatedAccessToken(ctx)
+	if !ok {
+		return nil, port.ErrUnauthenticated
+	}
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, repository.endpoint+"?"+query.Encode(), nil)
+	if err != nil {
+		return nil, errors.Join(port.ErrRepositoryOperation, err)
+	}
+	repository.setHeaders(httpRequest, accessToken)
+	httpResponse, err := repository.httpClient.Do(httpRequest)
+	if err != nil {
+		return nil, errors.Join(port.ErrRepositoryOperation, err)
+	}
+	defer httpResponse.Body.Close()
+	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
+		return nil, decodeRepositoryError(httpResponse)
+	}
+	var rows []analysisRow
+	if err := json.NewDecoder(httpResponse.Body).Decode(&rows); err != nil {
+		return nil, errors.Join(port.ErrRepositoryOperation, err)
+	}
+	records := make([]analysisdomain.AnalysisRecord, 0, len(rows))
+	for _, row := range rows {
+		result, err := analysisdomain.NewAnalysisResult(analysisdomain.AnalysisResultParams{
+			MatchScore: row.MatchScore, JobSummary: row.JobSummary,
+			CoreRequirements: row.CoreRequirements, MatchedSkills: row.MatchedSkills,
+			MissingSkills: row.MissingSkills, ResumeSuggestions: row.ResumeSuggestions,
+			PreparationTopics: row.PreparationTopics, GreetingMessage: row.GreetingMessage,
+		})
+		if err != nil {
+			return nil, errors.Join(port.ErrRepositoryOperation, err)
+		}
+		record, err := analysisdomain.NewAnalysisRecord(row.ID, row.CompanyName, row.JobTitle, row.CreatedAt, result)
+		if err != nil {
+			return nil, errors.Join(port.ErrRepositoryOperation, err)
+		}
+		records = append(records, record)
+	}
+	return records, nil
 }
 
 func (repository *SupabaseAnalysisRepository) FindByID(

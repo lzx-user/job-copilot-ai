@@ -5,11 +5,14 @@ import (
 	"errors"
 
 	analysisdomain "job-copilot-backend/internal/domain/analysis"
+	interviewdomain "job-copilot-backend/internal/domain/interview"
 )
 
 var (
 	ErrRepositoryUnavailable = errors.New("repository unavailable")
 	ErrRepositoryOperation   = errors.New("repository operation failed")
+	ErrRepositoryNotFound    = errors.New("repository record not found")
+	ErrRepositoryConflict    = errors.New("repository conflict")
 )
 
 // AnalysisRepository 描述核心业务需要的分析结果持久化能力。
@@ -21,4 +24,28 @@ type AnalysisRepository interface {
 		result analysisdomain.AnalysisResult,
 	) (analysisID string, err error)
 	FindByID(ctx context.Context, userID string, analysisID string) (analysisdomain.AnalysisResult, error)
+	List(ctx context.Context, userID string, limit int) ([]analysisdomain.AnalysisRecord, error)
+	FindRecordByID(ctx context.Context, userID string, analysisID string) (analysisdomain.AnalysisRecord, error)
+}
+
+// InterviewRepository 只暴露五轮面试启动、恢复与持久化所需的能力。
+type InterviewRepository interface {
+	ListOptions(ctx context.Context, userID string) ([]interviewdomain.InterviewOption, error)
+	FindContext(ctx context.Context, userID string, analysisID string) (interviewdomain.InterviewContext, error)
+	CreatePendingSession(ctx context.Context, userID string, analysisID string) (sessionID string, err error)
+	StartSession(
+		ctx context.Context,
+		session interviewdomain.InterviewSession,
+		question interviewdomain.InterviewMessage,
+	) error
+	FindTurnContext(ctx context.Context, userID string, sessionID string) (interviewdomain.InterviewTurnContext, error)
+	FindReportContext(ctx context.Context, userID string, sessionID string) (interviewdomain.InterviewReportContext, error)
+	FindSessionDetail(ctx context.Context, userID string, sessionID string) (interviewdomain.SessionDetail, error)
+	SaveTurn(
+		ctx context.Context,
+		session interviewdomain.InterviewSession,
+		answer interviewdomain.InterviewMessage,
+		result interviewdomain.InterviewTurnResult,
+	) error
+	SaveReport(ctx context.Context, session interviewdomain.InterviewSession, report interviewdomain.InterviewReport) error
 }

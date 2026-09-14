@@ -9,6 +9,7 @@ import (
 	httpadapter "job-copilot-backend/internal/adapter/http"
 	"job-copilot-backend/internal/adapter/repository"
 	analysisapp "job-copilot-backend/internal/application/analysis"
+	interviewapp "job-copilot-backend/internal/application/interview"
 	"job-copilot-backend/internal/config"
 	"job-copilot-backend/internal/port"
 )
@@ -43,14 +44,52 @@ func main() {
 	); err == nil {
 		analysisRepository = configuredRepository
 	}
+	var interviewRepository port.InterviewRepository = repository.NewPlaceholderInterviewRepository()
+	if configuredRepository, err := repository.NewSupabaseInterviewRepository(
+		appConfig.SupabaseURL,
+		appConfig.SupabaseAnonKey,
+		nil,
+	); err == nil {
+		interviewRepository = configuredRepository
+	}
 
 	analyzeJDService, err := analysisapp.NewAnalyzeJDService(aiClient, analysisRepository)
 	if err != nil {
 		log.Fatalf("初始化 JD 分析服务失败：%v", err)
 	}
+	analysisHistoryService, err := analysisapp.NewHistoryService(analysisRepository)
+	if err != nil {
+		log.Fatalf("初始化 JD 历史服务失败：%v", err)
+	}
+	startInterviewService, err := interviewapp.NewStartInterviewService(aiClient, interviewRepository)
+	if err != nil {
+		log.Fatalf("初始化模拟面试服务失败：%v", err)
+	}
+	listInterviewOptionsService, err := interviewapp.NewListInterviewOptionsService(interviewRepository)
+	if err != nil {
+		log.Fatalf("初始化面试岗位选项服务失败：%v", err)
+	}
+	interviewTurnService, err := interviewapp.NewTurnService(aiClient, interviewRepository)
+	if err != nil {
+		log.Fatalf("初始化面试单轮服务失败：%v", err)
+	}
+	interviewSessionService, err := interviewapp.NewSessionService(interviewRepository)
+	if err != nil {
+		log.Fatalf("初始化面试会话服务失败：%v", err)
+	}
+	interviewReportService, err := interviewapp.NewReportService(aiClient, interviewRepository)
+	if err != nil {
+		log.Fatalf("初始化面试报告服务失败：%v", err)
+	}
 	engine := httpadapter.NewRouter(appConfig.FrontendOrigin, httpadapter.Dependencies{
-		AuthProvider:     authProvider,
-		AnalyzeJDService: analyzeJDService,
+		AuthProvider:                authProvider,
+		AnalyzeJDService:            analyzeJDService,
+		AnalysisHistoryService:      analysisHistoryService,
+		StartInterviewService:       startInterviewService,
+		ListInterviewOptionsService: listInterviewOptionsService,
+		InterviewTurnService:        interviewTurnService,
+		InterviewSessionService:     interviewSessionService,
+		InterviewReportService:      interviewReportService,
 	})
 	address := ":" + appConfig.AppPort
 

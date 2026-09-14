@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	analysisdomain "job-copilot-backend/internal/domain/analysis"
+	interviewdomain "job-copilot-backend/internal/domain/interview"
 	"job-copilot-backend/internal/port"
 )
 
@@ -17,6 +18,31 @@ var _ port.AIClient = (*PlaceholderAdapter)(nil)
 
 func NewPlaceholderAdapter() *PlaceholderAdapter {
 	return &PlaceholderAdapter{}
+}
+
+func (adapter *PlaceholderAdapter) GenerateFirstInterviewQuestion(
+	ctx context.Context,
+	_ interviewdomain.InterviewContext,
+) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
+	return "", errors.Join(port.ErrAIUnavailable, ErrClientNotConfigured)
+}
+
+func (adapter *PlaceholderAdapter) EvaluateInterviewAnswer(
+	context.Context,
+	interviewdomain.InterviewTurnPrompt,
+) (interviewdomain.InterviewTurnResult, error) {
+	return interviewdomain.InterviewTurnResult{}, port.ErrAIUnavailable
+}
+
+func (adapter *PlaceholderAdapter) GenerateInterviewReport(
+	context.Context,
+	interviewdomain.InterviewReportContext,
+) (interviewdomain.InterviewReport, error) {
+	return interviewdomain.InterviewReport{}, port.ErrAIUnavailable
 }
 
 func (adapter *PlaceholderAdapter) AnalyzeJD(

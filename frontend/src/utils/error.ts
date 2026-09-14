@@ -23,6 +23,10 @@ export function toUserMessage(error: unknown): string {
 
   const message = error instanceof Error ? error.message : String(error ?? '')
 
+  if (/failed to fetch|network ?error|load failed/i.test(message)) {
+    return '无法连接 Supabase 认证服务，请检查网络或 DNS 后重试'
+  }
+
   if (/supabase.*(?:not configured|未配置)/i.test(message)) {
     return 'Supabase 尚未配置，请先在 frontend/.env.local 中填写项目地址和 anon key'
   }

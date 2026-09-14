@@ -12,6 +12,7 @@ import (
 	"time"
 
 	analysisdomain "job-copilot-backend/internal/domain/analysis"
+	interviewdomain "job-copilot-backend/internal/domain/interview"
 	"job-copilot-backend/internal/port"
 )
 
@@ -74,52 +75,116 @@ func (adapter *OpenAICompatibleAdapter) AnalyzeJD(
 	ctx context.Context,
 	request analysisdomain.AnalysisRequest,
 ) (analysisdomain.AnalysisResult, error) {
-	payload := chatCompletionRequest{
-		Model: adapter.model,
-		Messages: []chatMessage{
-			{
-				Role:    "system",
-				Content: analysisSystemPrompt,
-			},
-			{
-				Role:    "user",
-				Content: buildAnalysisPrompt(request),
-			},
+	content, err := adapter.requestJSONCompletion(ctx, []chatMessage{
+		{
+			Role:    "system",
+			Content: analysisSystemPrompt,
 		},
-		Temperature:    0.2,
+		{
+			Role:    "user",
+			Content: buildAnalysisPrompt(request),
+		},
+	}, 0.2)
+	if err != nil {
+		return analysisdomain.AnalysisResult{}, err
+	}
+	return decodeAnalysisResult(content)
+}
+
+func (adapter *OpenAICompatibleAdapter) GenerateFirstInterviewQuestion(
+	ctx context.Context,
+	input interviewdomain.InterviewContext,
+) (string, error) {
+	content, err := adapter.requestJSONCompletion(ctx, []chatMessage{
+		{
+			Role:    "system",
+			Content: interviewQuestionSystemPrompt,
+		},
+		{
+			Role:    "user",
+			Content: buildInterviewQuestionPrompt(input),
+		},
+	}, 0.5)
+	if err != nil {
+		return "", err
+	}
+	return decodeInterviewQuestion(content)
+}
+
+func (adapter *OpenAICompatibleAdapter) EvaluateInterviewAnswer(
+	ctx context.Context,
+	input interviewdomain.InterviewTurnPrompt,
+) (interviewdomain.InterviewTurnResult, error) {
+	systemPrompt := interviewFinalTurnSystemPrompt
+	if input.GenerateNextQuestion {
+		systemPrompt = interviewTurnSystemPrompt
+	}
+	content, err := adapter.requestJSONCompletion(ctx, []chatMessage{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: buildInterviewTurnPrompt(input)},
+	}, 0.3)
+	if err != nil {
+		return interviewdomain.InterviewTurnResult{}, err
+	}
+	return decodeInterviewTurn(content, input.GenerateNextQuestion)
+}
+
+func (adapter *OpenAICompatibleAdapter) GenerateInterviewReport(
+	ctx context.Context,
+	input interviewdomain.InterviewReportContext,
+) (interviewdomain.InterviewReport, error) {
+	content, err := adapter.requestJSONCompletion(ctx, []chatMessage{
+		{Role: "system", Content: interviewReportSystemPrompt},
+		{Role: "user", Content: buildInterviewReportPrompt(input)},
+	}, 0.2)
+	if err != nil {
+		return interviewdomain.InterviewReport{}, err
+	}
+	return decodeInterviewReport(content)
+}
+
+func (adapter *OpenAICompatibleAdapter) requestJSONCompletion(
+	ctx context.Context,
+	messages []chatMessage,
+	temperature float64,
+) (string, error) {
+	payload := chatCompletionRequest{
+		Model:          adapter.model,
+		Messages:       messages,
+		Temperature:    temperature,
 		ResponseFormat: responseFormat{Type: "json_object"},
 	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return analysisdomain.AnalysisResult{}, fmt.Errorf("encode AI request: %w", err)
+		return "", fmt.Errorf("encode AI request: %w", err)
 	}
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, adapter.endpoint, bytes.NewReader(body))
 	if err != nil {
-		return analysisdomain.AnalysisResult{}, fmt.Errorf("create AI request: %w", err)
+		return "", fmt.Errorf("create AI request: %w", err)
 	}
 	httpRequest.Header.Set("Authorization", "Bearer "+adapter.apiKey)
 	httpRequest.Header.Set("Content-Type", "application/json")
 
 	httpResponse, err := adapter.httpClient.Do(httpRequest)
 	if err != nil {
-		return analysisdomain.AnalysisResult{}, errors.Join(port.ErrAIUpstream, err)
+		return "", errors.Join(port.ErrAIUpstream, err)
 	}
 	defer httpResponse.Body.Close()
 
 	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
 		// 不读取或记录上游响应体，避免泄露请求上下文。
 		_, _ = io.Copy(io.Discard, httpResponse.Body)
-		return analysisdomain.AnalysisResult{}, fmt.Errorf("%w: status %d", port.ErrAIUpstream, httpResponse.StatusCode)
+		return "", fmt.Errorf("%w: status %d", port.ErrAIUpstream, httpResponse.StatusCode)
 	}
 
 	var completion chatCompletionResponse
 	if err := json.NewDecoder(httpResponse.Body).Decode(&completion); err != nil ||
 		len(completion.Choices) == 0 || strings.TrimSpace(completion.Choices[0].Message.Content) == "" {
-		return analysisdomain.AnalysisResult{}, port.ErrAIInvalidResponse
+		return "", port.ErrAIInvalidResponse
 	}
 
-	return decodeAnalysisResult(completion.Choices[0].Message.Content)
+	return completion.Choices[0].Message.Content, nil
 }
 
 const analysisSystemPrompt = `你是校招岗位匹配分析助手。请根据候选人信息与岗位要求给出客观、具体、可执行的分析。
@@ -145,6 +210,211 @@ func buildAnalysisPrompt(request analysisdomain.AnalysisRequest) string {
 		request.ResumeSummary(),
 		strings.Join(request.Skills(), "、"),
 	)
+}
+
+const interviewQuestionSystemPrompt = `你是一名严谨的校招面试官。请结合岗位要求与候选人经历生成第一道面试题。
+第一题应聚焦最关键的岗位能力，问题具体、一次只问一件事，不要提供答案，不要虚构候选人经历。
+只返回一个 JSON 对象，不要返回 Markdown、代码块或解释，并且只能包含：
+{"question":"面试题内容"}`
+
+func buildInterviewQuestionPrompt(input interviewdomain.InterviewContext) string {
+	return fmt.Sprintf(
+		"公司：%s\n岗位：%s\n岗位 JD：\n%s\n\n候选人经历摘要：\n%s\n\n候选人技能：%s\n岗位核心要求：%s\n建议准备主题：%s",
+		input.CompanyName(),
+		input.JobTitle(),
+		input.JDContent(),
+		input.ResumeSummary(),
+		strings.Join(input.Skills(), "、"),
+		strings.Join(input.CoreRequirements(), "、"),
+		strings.Join(input.PreparationTopics(), "、"),
+	)
+}
+
+const interviewTurnSystemPrompt = `你是一名严谨的校招面试官。请评价候选人对当前问题的回答，并生成一道自然衔接的下一题。
+评价必须基于给定岗位、经历与回答，不得虚构事实。下一题一次只问一件事，不要提供答案。
+只返回一个 JSON 对象，不要返回 Markdown、代码块或解释，并且必须且只能包含：
+{"score":0到100的整数,"feedback":"具体评价","strengths":["回答优点"],"improvements":["改进建议"],"nextQuestion":"下一道问题"}
+strengths 和 improvements 各至少一项。`
+
+const interviewFinalTurnSystemPrompt = `你是一名严谨的校招面试官。这是第 5 轮也是最后一轮，请只评价候选人对当前问题的回答，不要生成下一题或最终报告。
+评价必须基于给定岗位、经历与回答，不得虚构事实。
+只返回一个 JSON 对象，不要返回 Markdown、代码块或解释，并且必须且只能包含：
+{"score":0到100的整数,"feedback":"具体评价","strengths":["回答优点"],"improvements":["改进建议"]}
+strengths 和 improvements 各至少一项。`
+
+const interviewReportSystemPrompt = `你是一名严谨的校招面试复盘教练。请根据岗位、候选人信息和完整五轮问答，生成客观、具体、可执行的最终报告。
+所有评分都必须是 0 到 100 的整数。只评价给定材料，不得虚构候选人经历。
+只返回一个 JSON 对象，不要返回 Markdown、代码块或解释，并且必须且只能包含：
+{"overallScore":0,"technicalScore":0,"expressionScore":0,"projectDepthScore":0,"strengths":["优势"],"weaknesses":["不足"],"recommendedTopics":["建议准备主题"],"answerTips":["回答技巧"],"summary":"总体总结"}
+strengths、weaknesses、recommendedTopics 和 answerTips 各至少一项。`
+
+const (
+	maxInterviewHistoryRunes      = 6000
+	maxInterviewMessageRunes      = 1200
+	maxInterviewSkillsRunes       = 1500
+	maxInterviewRequirementsRunes = 2500
+)
+
+func buildInterviewTurnPrompt(input interviewdomain.InterviewTurnPrompt) string {
+	contextValue := input.Context
+	return fmt.Sprintf(
+		"公司：%s\n岗位：%s\n岗位 JD：\n%s\n\n候选人经历摘要：\n%s\n\n技能：%s\n核心要求：%s\n\n最近对话：\n%s\n当前回答：\n%s",
+		contextValue.CompanyName(), contextValue.JobTitle(), truncateRunes(contextValue.JDContent(), 4000),
+		truncateRunes(contextValue.ResumeSummary(), 2500), truncateRunes(strings.Join(contextValue.Skills(), "、"), maxInterviewSkillsRunes),
+		truncateRunes(strings.Join(contextValue.CoreRequirements(), "、"), maxInterviewRequirementsRunes),
+		buildInterviewHistory(input.Messages), truncateRunes(input.Answer, 5000),
+	)
+}
+
+func buildInterviewHistory(messages []interviewdomain.TranscriptMessage) string {
+	lines := make([]string, 0, len(messages))
+	remaining := maxInterviewHistoryRunes
+	for index := len(messages) - 1; index >= 0 && remaining > 0; index-- {
+		message := messages[index]
+		role := "面试官"
+		if message.Role == interviewdomain.InterviewMessageRoleCandidate {
+			role = "候选人"
+		}
+		prefix := fmt.Sprintf("第%d轮 %s：", message.Round, role)
+		contentLimit := min(maxInterviewMessageRunes, remaining-len([]rune(prefix))-1)
+		if contentLimit <= 0 {
+			break
+		}
+		line := prefix + truncateRunes(message.Content, contentLimit) + "\n"
+		lines = append([]string{line}, lines...)
+		remaining -= len([]rune(line))
+	}
+	return strings.Join(lines, "")
+}
+
+func buildInterviewReportPrompt(input interviewdomain.InterviewReportContext) string {
+	contextValue := input.Context
+	var transcript strings.Builder
+	for _, message := range input.Messages {
+		role := "面试官"
+		if message.Role == interviewdomain.InterviewMessageRoleCandidate {
+			role = "候选人"
+		}
+		fmt.Fprintf(&transcript, "第%d轮 %s：%s\n", message.Round, role, truncateRunes(message.Content, 800))
+		if message.Feedback != nil {
+			fmt.Fprintf(
+				&transcript,
+				"本轮评分：%d；评价：%s；优点：%s；改进：%s\n",
+				message.Feedback.Score(), truncateRunes(message.Feedback.Feedback(), 600),
+				truncateRunes(strings.Join(message.Feedback.Strengths(), "、"), 600),
+				truncateRunes(strings.Join(message.Feedback.Improvements(), "、"), 600),
+			)
+		}
+	}
+	return fmt.Sprintf(
+		"公司：%s\n岗位：%s\n岗位 JD：\n%s\n\n候选人经历摘要：\n%s\n\n技能：%s\n核心要求：%s\n\n五轮面试记录：\n%s",
+		contextValue.CompanyName(), contextValue.JobTitle(), truncateRunes(contextValue.JDContent(), 4000),
+		truncateRunes(contextValue.ResumeSummary(), 2500), truncateRunes(strings.Join(contextValue.Skills(), "、"), maxInterviewSkillsRunes),
+		truncateRunes(strings.Join(contextValue.CoreRequirements(), "、"), maxInterviewRequirementsRunes), transcript.String(),
+	)
+}
+
+func decodeInterviewTurn(content string, expectsNextQuestion bool) (interviewdomain.InterviewTurnResult, error) {
+	var output struct {
+		Score        *int      `json:"score"`
+		Feedback     *string   `json:"feedback"`
+		Strengths    *[]string `json:"strengths"`
+		Improvements *[]string `json:"improvements"`
+		NextQuestion *string   `json:"nextQuestion"`
+	}
+	decoder := json.NewDecoder(strings.NewReader(content))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&output); err != nil {
+		return interviewdomain.InterviewTurnResult{}, errors.Join(port.ErrAIInvalidResponse, err)
+	}
+	if err := ensureJSONEnded(decoder); err != nil {
+		return interviewdomain.InterviewTurnResult{}, errors.Join(port.ErrAIInvalidResponse, err)
+	}
+	if output.Score == nil || output.Feedback == nil || output.Strengths == nil || output.Improvements == nil ||
+		(expectsNextQuestion && output.NextQuestion == nil) || (!expectsNextQuestion && output.NextQuestion != nil) {
+		return interviewdomain.InterviewTurnResult{}, port.ErrAIInvalidResponse
+	}
+	feedback, err := interviewdomain.NewInterviewFeedback(*output.Score, *output.Feedback, *output.Strengths, *output.Improvements)
+	if err != nil {
+		return interviewdomain.InterviewTurnResult{}, errors.Join(port.ErrAIInvalidResponse, err)
+	}
+	if !expectsNextQuestion {
+		return interviewdomain.NewFinalInterviewTurnResult(feedback), nil
+	}
+	result, err := interviewdomain.NewInterviewTurnResult(feedback, *output.NextQuestion)
+	if err != nil {
+		return interviewdomain.InterviewTurnResult{}, errors.Join(port.ErrAIInvalidResponse, err)
+	}
+	return result, nil
+}
+
+func decodeInterviewReport(content string) (interviewdomain.InterviewReport, error) {
+	var output struct {
+		OverallScore      *int      `json:"overallScore"`
+		TechnicalScore    *int      `json:"technicalScore"`
+		ExpressionScore   *int      `json:"expressionScore"`
+		ProjectDepthScore *int      `json:"projectDepthScore"`
+		Strengths         *[]string `json:"strengths"`
+		Weaknesses        *[]string `json:"weaknesses"`
+		RecommendedTopics *[]string `json:"recommendedTopics"`
+		AnswerTips        *[]string `json:"answerTips"`
+		Summary           *string   `json:"summary"`
+	}
+	decoder := json.NewDecoder(strings.NewReader(content))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&output); err != nil {
+		return interviewdomain.InterviewReport{}, errors.Join(port.ErrAIInvalidResponse, err)
+	}
+	if err := ensureJSONEnded(decoder); err != nil {
+		return interviewdomain.InterviewReport{}, errors.Join(port.ErrAIInvalidResponse, err)
+	}
+	if output.OverallScore == nil || output.TechnicalScore == nil || output.ExpressionScore == nil ||
+		output.ProjectDepthScore == nil || output.Strengths == nil || output.Weaknesses == nil ||
+		output.RecommendedTopics == nil || output.AnswerTips == nil || output.Summary == nil {
+		return interviewdomain.InterviewReport{}, port.ErrAIInvalidResponse
+	}
+	report, err := interviewdomain.NewInterviewReport(interviewdomain.InterviewReportParams{
+		OverallScore: *output.OverallScore, TechnicalScore: *output.TechnicalScore,
+		ExpressionScore: *output.ExpressionScore, ProjectDepthScore: *output.ProjectDepthScore,
+		Strengths: *output.Strengths, Weaknesses: *output.Weaknesses,
+		RecommendedTopics: *output.RecommendedTopics, AnswerTips: *output.AnswerTips,
+		Summary: *output.Summary,
+	})
+	if err != nil {
+		return interviewdomain.InterviewReport{}, errors.Join(port.ErrAIInvalidResponse, err)
+	}
+	return report, nil
+}
+
+func truncateRunes(value string, limit int) string {
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+	return string(runes[:limit])
+}
+
+func decodeInterviewQuestion(content string) (string, error) {
+	var output struct {
+		Question *string `json:"question"`
+	}
+	decoder := json.NewDecoder(strings.NewReader(content))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&output); err != nil {
+		return "", errors.Join(port.ErrAIInvalidResponse, err)
+	}
+	if err := ensureJSONEnded(decoder); err != nil {
+		return "", errors.Join(port.ErrAIInvalidResponse, err)
+	}
+	if output.Question == nil {
+		return "", port.ErrAIInvalidResponse
+	}
+
+	question := strings.TrimSpace(*output.Question)
+	if question == "" || len([]rune(question)) > 2000 {
+		return "", port.ErrAIInvalidResponse
+	}
+	return question, nil
 }
 
 func decodeAnalysisResult(content string) (analysisdomain.AnalysisResult, error) {

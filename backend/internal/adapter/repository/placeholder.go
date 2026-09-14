@@ -31,3 +31,19 @@ func (repository *PlaceholderAnalysisRepository) FindByID(
 ) (analysisdomain.AnalysisResult, error) {
 	return analysisdomain.AnalysisResult{}, port.ErrRepositoryUnavailable
 }
+
+func (repository *PlaceholderAnalysisRepository) List(
+	context.Context,
+	string,
+	int,
+) ([]analysisdomain.AnalysisRecord, error) {
+	return nil, port.ErrRepositoryUnavailable
+}
+
+func (repository *PlaceholderAnalysisRepository) FindRecordByID(
+	context.Context,
+	string,
+	string,
+) (analysisdomain.AnalysisRecord, error) {
+	return analysisdomain.AnalysisRecord{}, port.ErrRepositoryUnavailable
+}
