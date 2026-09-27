@@ -70,6 +70,18 @@ func (repository *PlaceholderInterviewRepository) FindSessionDetail(
 	return interviewdomain.SessionDetail{}, port.ErrRepositoryUnavailable
 }
 
+func (repository *PlaceholderInterviewRepository) ListSessions(
+	context.Context,
+	string,
+	int,
+) ([]interviewdomain.InterviewHistoryRecord, error) {
+	return nil, port.ErrRepositoryUnavailable
+}
+
+func (repository *PlaceholderInterviewRepository) DeleteSession(context.Context, string, string) error {
+	return port.ErrRepositoryUnavailable
+}
+
 func (repository *PlaceholderInterviewRepository) SaveTurn(
 	context.Context,
 	interviewdomain.InterviewSession,

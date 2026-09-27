@@ -3,12 +3,16 @@ package main
 import (
 	"log"
 	"net/http"
+	"strings"
+
+	"github.com/gin-gonic/gin"
 
 	"job-copilot-backend/internal/adapter/ai"
 	"job-copilot-backend/internal/adapter/auth"
 	httpadapter "job-copilot-backend/internal/adapter/http"
 	"job-copilot-backend/internal/adapter/repository"
 	analysisapp "job-copilot-backend/internal/application/analysis"
+	dashboardapp "job-copilot-backend/internal/application/dashboard"
 	interviewapp "job-copilot-backend/internal/application/interview"
 	"job-copilot-backend/internal/config"
 	"job-copilot-backend/internal/port"
@@ -16,6 +20,9 @@ import (
 
 func main() {
 	appConfig := config.Load()
+	if strings.EqualFold(appConfig.AppEnv, "production") {
+		gin.SetMode(gin.ReleaseMode)
+	}
 
 	var authProvider port.AuthProvider
 	if configuredAuth, err := auth.NewSupabaseAuthAdapter(
@@ -52,6 +59,14 @@ func main() {
 	); err == nil {
 		interviewRepository = configuredRepository
 	}
+	var dashboardRepository port.DashboardRepository = &repository.PlaceholderDashboardRepository{}
+	if configuredRepository, err := repository.NewSupabaseDashboardRepository(
+		appConfig.SupabaseURL,
+		appConfig.SupabaseAnonKey,
+		nil,
+	); err == nil {
+		dashboardRepository = configuredRepository
+	}
 
 	analyzeJDService, err := analysisapp.NewAnalyzeJDService(aiClient, analysisRepository)
 	if err != nil {
@@ -81,6 +96,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化面试报告服务失败：%v", err)
 	}
+	interviewHistoryService, err := interviewapp.NewHistoryService(interviewRepository)
+	if err != nil {
+		log.Fatalf("初始化面试历史服务失败：%v", err)
+	}
+	dashboardService, err := dashboardapp.NewService(dashboardRepository)
+	if err != nil {
+		log.Fatalf("初始化仪表盘服务失败：%v", err)
+	}
 	engine := httpadapter.NewRouter(appConfig.FrontendOrigin, httpadapter.Dependencies{
 		AuthProvider:                authProvider,
 		AnalyzeJDService:            analyzeJDService,
@@ -90,7 +113,13 @@ func main() {
 		InterviewTurnService:        interviewTurnService,
 		InterviewSessionService:     interviewSessionService,
 		InterviewReportService:      interviewReportService,
+		InterviewHistoryService:     interviewHistoryService,
+		AIRateLimit:                 appConfig.AIRateLimit,
+		DashboardService:            dashboardService,
 	})
+	if err := engine.SetTrustedProxies(nil); err != nil {
+		log.Fatalf("配置可信代理失败：%v", err)
+	}
 	address := ":" + appConfig.AppPort
 
 	log.Printf(

@@ -36,6 +36,13 @@ func (service *HistoryService) Get(ctx context.Context, userID, analysisID strin
 	return service.repository.FindRecordByID(ctx, userID, analysisID)
 }
 
+func (service *HistoryService) Delete(ctx context.Context, userID, analysisID string) error {
+	if strings.TrimSpace(userID) == "" || !isUUID(strings.TrimSpace(analysisID)) {
+		return ErrInvalidAnalysisHistoryQuery
+	}
+	return service.repository.Delete(ctx, userID, analysisID)
+}
+
 func isUUID(value string) bool {
 	if len(value) != 36 {
 		return false

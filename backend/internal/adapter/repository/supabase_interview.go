@@ -336,6 +336,117 @@ func (repository *SupabaseInterviewRepository) FindSessionDetail(
 	}, nil
 }
 
+func (repository *SupabaseInterviewRepository) ListSessions(
+	ctx context.Context,
+	userID string,
+	limit int,
+) ([]interviewdomain.InterviewHistoryRecord, error) {
+	if strings.TrimSpace(userID) == "" {
+		return nil, port.ErrRepositoryOperation
+	}
+	accessToken, ok := port.AuthenticatedAccessToken(ctx)
+	if !ok {
+		return nil, port.ErrUnauthenticated
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	body, err := json.Marshal(struct {
+		Limit int `json:"p_limit"`
+	}{Limit: limit})
+	if err != nil {
+		return nil, errors.Join(port.ErrRepositoryOperation, err)
+	}
+	httpRequest, err := http.NewRequestWithContext(
+		ctx, http.MethodPost, repository.baseURL+"/rpc/list_interview_history", bytes.NewReader(body),
+	)
+	if err != nil {
+		return nil, errors.Join(port.ErrRepositoryOperation, err)
+	}
+	repository.setHeaders(httpRequest, accessToken)
+	httpResponse, err := repository.httpClient.Do(httpRequest)
+	if err != nil {
+		return nil, errors.Join(port.ErrRepositoryOperation, err)
+	}
+	defer httpResponse.Body.Close()
+	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
+		return nil, repositoryHTTPError(httpResponse.StatusCode)
+	}
+	var rows []struct {
+		ID           string                          `json:"session_id"`
+		CompanyName  string                          `json:"company_name"`
+		JobTitle     string                          `json:"job_title"`
+		Status       interviewdomain.InterviewStatus `json:"status"`
+		CurrentRound int                             `json:"current_round"`
+		MaxRounds    int                             `json:"max_rounds"`
+		CreatedAt    time.Time                       `json:"created_at"`
+		UpdatedAt    time.Time                       `json:"updated_at"`
+		CompletedAt  *time.Time                      `json:"completed_at"`
+		OverallScore *int                            `json:"overall_score"`
+	}
+	if err := json.NewDecoder(httpResponse.Body).Decode(&rows); err != nil {
+		return nil, errors.Join(port.ErrRepositoryOperation, err)
+	}
+	records := make([]interviewdomain.InterviewHistoryRecord, 0, len(rows))
+	for _, row := range rows {
+		record, err := interviewdomain.NewInterviewHistoryRecord(interviewdomain.InterviewHistoryRecordParams{
+			ID: row.ID, CompanyName: row.CompanyName, JobTitle: row.JobTitle,
+			Status: row.Status, CurrentRound: row.CurrentRound, MaxRounds: row.MaxRounds,
+			OverallScore: row.OverallScore, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+			CompletedAt: row.CompletedAt,
+		})
+		if err != nil {
+			return nil, errors.Join(port.ErrRepositoryOperation, err)
+		}
+		records = append(records, record)
+	}
+	return records, nil
+}
+
+func (repository *SupabaseInterviewRepository) DeleteSession(
+	ctx context.Context,
+	userID string,
+	sessionID string,
+) error {
+	accessToken, ok := port.AuthenticatedAccessToken(ctx)
+	if !ok {
+		return port.ErrUnauthenticated
+	}
+	query := url.Values{}
+	query.Set("id", "eq."+sessionID)
+	query.Set("user_id", "eq."+userID)
+	query.Set("select", "id")
+	httpRequest, err := http.NewRequestWithContext(
+		ctx, http.MethodDelete, repository.baseURL+"/interview_sessions?"+query.Encode(), nil,
+	)
+	if err != nil {
+		return errors.Join(port.ErrRepositoryOperation, err)
+	}
+	repository.setHeaders(httpRequest, accessToken)
+	httpRequest.Header.Set("Prefer", "return=representation")
+	httpResponse, err := repository.httpClient.Do(httpRequest)
+	if err != nil {
+		return errors.Join(port.ErrRepositoryOperation, err)
+	}
+	defer httpResponse.Body.Close()
+	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
+		return repositoryHTTPError(httpResponse.StatusCode)
+	}
+	var rows []struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(httpResponse.Body).Decode(&rows); err != nil {
+		return errors.Join(port.ErrRepositoryOperation, err)
+	}
+	if len(rows) == 0 {
+		return port.ErrRepositoryNotFound
+	}
+	if len(rows) != 1 {
+		return port.ErrRepositoryOperation
+	}
+	return nil
+}
+
 func (repository *SupabaseInterviewRepository) SaveTurn(
 	ctx context.Context,
 	session interviewdomain.InterviewSession,

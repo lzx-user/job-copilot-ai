@@ -266,6 +266,50 @@ func (repository *SupabaseAnalysisRepository) FindByID(
 	})
 }
 
+func (repository *SupabaseAnalysisRepository) Delete(
+	ctx context.Context,
+	userID string,
+	analysisID string,
+) error {
+	accessToken, ok := port.AuthenticatedAccessToken(ctx)
+	if !ok {
+		return port.ErrUnauthenticated
+	}
+	query := url.Values{}
+	query.Set("id", "eq."+analysisID)
+	query.Set("user_id", "eq."+userID)
+	query.Set("select", "id")
+	httpRequest, err := http.NewRequestWithContext(
+		ctx, http.MethodDelete, repository.endpoint+"?"+query.Encode(), nil,
+	)
+	if err != nil {
+		return errors.Join(port.ErrRepositoryOperation, err)
+	}
+	repository.setHeaders(httpRequest, accessToken)
+	httpRequest.Header.Set("Prefer", "return=representation")
+	httpResponse, err := repository.httpClient.Do(httpRequest)
+	if err != nil {
+		return errors.Join(port.ErrRepositoryOperation, err)
+	}
+	defer httpResponse.Body.Close()
+	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
+		return decodeRepositoryError(httpResponse)
+	}
+	var rows []struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(httpResponse.Body).Decode(&rows); err != nil {
+		return errors.Join(port.ErrRepositoryOperation, err)
+	}
+	if len(rows) == 0 {
+		return port.ErrRepositoryNotFound
+	}
+	if len(rows) != 1 {
+		return port.ErrRepositoryOperation
+	}
+	return nil
+}
+
 func (repository *SupabaseAnalysisRepository) setHeaders(request *http.Request, accessToken string) {
 	request.Header.Set("apikey", repository.anonKey)
 	request.Header.Set("Authorization", "Bearer "+accessToken)
