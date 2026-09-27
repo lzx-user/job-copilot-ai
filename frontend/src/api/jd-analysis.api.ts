@@ -27,3 +27,7 @@ export async function getJDAnalysis(analysisId: string): Promise<JdAnalysisRecor
   const response = await request.get<ApiResponse<JdAnalysisRecord>>(`/ai/jd-analyses/${analysisId}`)
   return response.data.data
 }
+
+export async function deleteJDAnalysis(analysisId: string): Promise<void> {
+  await request.delete(`/ai/jd-analyses/${analysisId}`)
+}

@@ -1,6 +1,7 @@
 import type { ApiResponse } from '../types/api'
 import type {
   InterviewOptionsResult,
+  InterviewHistoryResult,
   InterviewReportResult,
   InterviewSessionDetail,
   InterviewTurnResult,
@@ -43,4 +44,13 @@ export async function startInterview(analysisId: string): Promise<StartInterview
     { timeout: 100_000 },
   )
   return response.data.data
+}
+
+export async function listInterviewSessions(): Promise<InterviewHistoryResult> {
+  const response = await request.get<ApiResponse<InterviewHistoryResult>>('/ai/interview/sessions')
+  return response.data.data
+}
+
+export async function deleteInterviewSession(sessionId: string): Promise<void> {
+  await request.delete(`/ai/interview/sessions/${sessionId}`)
 }
