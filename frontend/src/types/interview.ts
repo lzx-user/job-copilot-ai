@@ -67,3 +67,20 @@ export interface InterviewReportResult extends InterviewReport {
   sessionId: string
   status: 'completed'
 }
+
+export interface InterviewHistoryRecord {
+  sessionId: string
+  companyName: string
+  jobTitle: string
+  status: 'pending' | 'in_progress' | 'completed'
+  currentRound: number
+  maxRounds: number
+  overallScore: number | null
+  createdAt: string
+  updatedAt: string
+  completedAt: string | null
+}
+
+export interface InterviewHistoryResult {
+  items: InterviewHistoryRecord[]
+}

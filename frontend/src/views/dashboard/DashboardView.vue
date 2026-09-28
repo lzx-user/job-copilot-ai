@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { Calendar, DocumentChecked, Microphone, Right, TrendCharts, User } from '@element-plus/icons-vue'
 import type { Component } from 'vue'
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { getDashboardSummary } from '../../api/dashboard.api'
 import AppEmpty from '../../components/common/AppEmpty.vue'
 import { useAuthStore } from '../../stores/auth.store'
+import type { DashboardSummary } from '../../types/dashboard'
+import { toUserMessage } from '../../utils/error'
 
 interface StatItem {
   label: string
@@ -17,19 +20,64 @@ interface StatItem {
 const router = useRouter()
 const authStore = useAuthStore()
 const displayName = computed(() => authStore.user?.email?.split('@')[0] || '求职同学')
+const loading = ref(true)
+const loadError = ref('')
+const summary = ref<DashboardSummary>({
+  jdCount: 0,
+  interviewCount: 0,
+  weeklyRecordCount: 0,
+  profileCompleteness: 0,
+  recentRecords: [],
+})
 
-const stats: StatItem[] = [
-  { label: '已分析 JD', value: 0, hint: '等待首次分析', icon: DocumentChecked, tone: 'blue' },
-  { label: '模拟面试次数', value: 0, hint: '等待首次练习', icon: Microphone, tone: 'violet' },
-  { label: '本周新增记录', value: 0, hint: '从今天开始积累', icon: TrendCharts, tone: 'green' },
-  { label: '档案完整度', value: 0, hint: '下一阶段可保存', icon: User, tone: 'orange' },
-]
+const stats = computed<StatItem[]>(() => [
+  { label: '已分析 JD', value: summary.value.jdCount, hint: summary.value.jdCount ? '已保存到历史记录' : '等待首次分析', icon: DocumentChecked, tone: 'blue' },
+  { label: '模拟面试次数', value: summary.value.interviewCount, hint: summary.value.interviewCount ? '包含进行中与已完成' : '等待首次练习', icon: Microphone, tone: 'violet' },
+  { label: '本周新增记录', value: summary.value.weeklyRecordCount, hint: '最近 7 天创建', icon: TrendCharts, tone: 'green' },
+  { label: '档案完整度', value: summary.value.profileCompleteness, hint: summary.value.profileCompleteness === 100 ? '档案已完善' : '继续补充真实经历', icon: User, tone: 'orange' },
+])
+
+interface RecentRecord {
+  id: string
+  kind: 'JD 分析' | '模拟面试'
+  title: string
+  description: string
+  createdAt: string
+  path: string
+}
+
+const recentRecords = computed<RecentRecord[]>(() => summary.value.recentRecords.map((record) => ({
+  id: `${record.kind}-${record.id}`,
+  kind: record.kind === 'jd' ? 'JD 分析' : '模拟面试',
+  title: `${record.companyName} · ${record.jobTitle}`,
+  description: record.description,
+  createdAt: record.createdAt,
+  path: record.kind === 'jd' ? '/app/history' : `/app/interviews/${record.id}`,
+})))
 
 const plans = [
   { title: '了解个人档案需要准备的内容', status: '建议', path: '/app/profile' },
   { title: '准备一份目标岗位 JD', status: '待准备', path: '/app/jd-analysis' },
   { title: '浏览模拟面试流程', status: '待了解', path: '/app/interviews' },
 ]
+
+async function loadDashboard() {
+  loading.value = true
+  loadError.value = ''
+  try {
+    summary.value = await getDashboardSummary()
+  } catch (error) {
+    loadError.value = toUserMessage(error)
+  } finally {
+    loading.value = false
+  }
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))
+}
+
+onMounted(loadDashboard)
 </script>
 
 <template>
@@ -47,10 +95,12 @@ const plans = [
       </div>
     </section>
 
-    <section class="stats-grid" aria-label="求职数据概览">
+    <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
+
+    <section v-loading="loading" class="stats-grid" aria-label="求职数据概览">
       <article v-for="stat in stats" :key="stat.label" class="panel stat-card">
         <span class="stat-icon" :class="stat.tone"><el-icon :size="23"><component :is="stat.icon" /></el-icon></span>
-        <div><span>{{ stat.label }}</span><strong>{{ stat.value }}</strong><small>{{ stat.hint }}</small></div>
+        <div><span>{{ stat.label }}</span><strong>{{ stat.value }}<small v-if="stat.label === '档案完整度'">%</small></strong><small>{{ stat.hint }}</small></div>
       </article>
     </section>
 
@@ -85,7 +135,13 @@ const plans = [
             <h2 class="panel-title">最近记录</h2>
             <el-button text type="primary" @click="router.push('/app/history')">查看全部</el-button>
           </div>
-          <AppEmpty title="还没有求职记录" description="完成首次 JD 分析或模拟面试后，最近记录会显示在这里。" icon="⌁">
+          <div v-if="recentRecords.length" class="recent-list">
+            <button v-for="record in recentRecords" :key="record.id" class="recent-row" @click="router.push(record.path)">
+              <span><small>{{ record.kind }}</small><strong>{{ record.title }}</strong></span>
+              <span><em>{{ record.description }}</em><time>{{ formatDate(record.createdAt) }}</time></span>
+            </button>
+          </div>
+          <AppEmpty v-else-if="!loading && !loadError" title="还没有求职记录" description="完成首次 JD 分析或模拟面试后，最近记录会显示在这里。" icon="⌁">
             <el-button type="primary" plain @click="router.push('/app/jd-analysis')">准备第一份 JD</el-button>
           </AppEmpty>
         </section>
@@ -106,12 +162,12 @@ const plans = [
 
         <section class="panel suggestion-panel">
           <span class="suggestion-icon">✦</span>
-          <div><h3>新手建议</h3><p>先准备目标岗位与项目摘要，下一阶段完善档案后，分析会更有上下文。</p></div>
+          <div><h3>新手建议</h3><p>先完善个人档案，再分析目标 JD，生成的面试问题会更贴合真实经历。</p></div>
         </section>
 
         <section class="panel stage-panel">
           <span class="stage-mark">01</span>
-          <div><strong>当前阶段</strong><p>认证基础与静态页面骨架</p></div>
+          <div><strong>当前阶段</strong><p>V1 核心闭环与真实数据复盘</p></div>
         </section>
       </aside>
     </div>
@@ -176,6 +232,13 @@ const plans = [
 .shortcut-interview .shortcut-icon { color: var(--color-secondary); }
 .recent-panel,.plan-panel { padding: 22px; }
 .recent-panel :deep(.empty-state) { min-height: 230px; border: 1px dashed #dbe2f2; border-radius: 14px; background: #fbfcff; }
+.recent-list { display: grid; }
+.recent-row { display: flex; width: 100%; padding: 14px 2px; align-items: center; justify-content: space-between; gap: 16px; border: 0; border-bottom: 1px solid var(--border-color); text-align: left; background: transparent; cursor: pointer; }
+.recent-row:hover strong { color: var(--color-primary); }
+.recent-row > span { display: grid; gap: 4px; }
+.recent-row > span:last-child { justify-items: end; }
+.recent-row small,.recent-row time { color: var(--text-secondary); }
+.recent-row em { color: var(--color-primary); font-style: normal; }
 .plan-panel .panel-title { display: flex; align-items: center; gap: 8px; }
 .plan-row { display: grid; width: 100%; min-height: 54px; padding: 0 2px; cursor: pointer; align-items: center; grid-template-columns: 20px 1fr auto; gap: 9px; border-bottom: 1px solid #edf0f6; text-align: left; color: var(--text-regular); background: transparent; }
 .plan-row:last-child { border-bottom: 0; }
@@ -210,4 +273,3 @@ const plans = [
   .stats-grid { grid-template-columns: 1fr; }
 }
 </style>
-

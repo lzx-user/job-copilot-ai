@@ -53,6 +53,19 @@ func (handler *JDAnalysisHistoryHandler) Get(ctx *gin.Context) {
 	response.Success(ctx, analysisRecordResponse(record))
 }
 
+func (handler *JDAnalysisHistoryHandler) Delete(ctx *gin.Context) {
+	userID, ok := middleware.AuthenticatedUserID(ctx)
+	if !ok {
+		response.Error(ctx, http.StatusUnauthorized, "UNAUTHORIZED", "请先登录")
+		return
+	}
+	if err := handler.service.Delete(ctx.Request.Context(), userID, ctx.Param("id")); err != nil {
+		handleAnalysisHistoryError(ctx, err)
+		return
+	}
+	response.Success(ctx, gin.H{"analysisId": ctx.Param("id")})
+}
+
 func analysisRecordResponse(record analysisdomain.AnalysisRecord) gin.H {
 	result := record.Result()
 	return gin.H{

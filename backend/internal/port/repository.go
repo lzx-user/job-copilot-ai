@@ -5,8 +5,13 @@ import (
 	"errors"
 
 	analysisdomain "job-copilot-backend/internal/domain/analysis"
+	dashboarddomain "job-copilot-backend/internal/domain/dashboard"
 	interviewdomain "job-copilot-backend/internal/domain/interview"
 )
+
+type DashboardRepository interface {
+	GetSummary(ctx context.Context, userID string) (dashboarddomain.Summary, error)
+}
 
 var (
 	ErrRepositoryUnavailable = errors.New("repository unavailable")
@@ -26,6 +31,7 @@ type AnalysisRepository interface {
 	FindByID(ctx context.Context, userID string, analysisID string) (analysisdomain.AnalysisResult, error)
 	List(ctx context.Context, userID string, limit int) ([]analysisdomain.AnalysisRecord, error)
 	FindRecordByID(ctx context.Context, userID string, analysisID string) (analysisdomain.AnalysisRecord, error)
+	Delete(ctx context.Context, userID string, analysisID string) error
 }
 
 // InterviewRepository 只暴露五轮面试启动、恢复与持久化所需的能力。
@@ -41,6 +47,8 @@ type InterviewRepository interface {
 	FindTurnContext(ctx context.Context, userID string, sessionID string) (interviewdomain.InterviewTurnContext, error)
 	FindReportContext(ctx context.Context, userID string, sessionID string) (interviewdomain.InterviewReportContext, error)
 	FindSessionDetail(ctx context.Context, userID string, sessionID string) (interviewdomain.SessionDetail, error)
+	ListSessions(ctx context.Context, userID string, limit int) ([]interviewdomain.InterviewHistoryRecord, error)
+	DeleteSession(ctx context.Context, userID string, sessionID string) error
 	SaveTurn(
 		ctx context.Context,
 		session interviewdomain.InterviewSession,

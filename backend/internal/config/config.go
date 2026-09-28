@@ -18,6 +18,7 @@ type Config struct {
 	AIAPIKey        string
 	AIModel         string
 	AITimeout       time.Duration
+	AIRateLimit     int
 }
 
 func Load() Config {
@@ -34,6 +35,7 @@ func Load() Config {
 		AIAPIKey:        getEnv("AI_API_KEY", ""),
 		AIModel:         getEnv("AI_MODEL", ""),
 		AITimeout:       time.Duration(getEnvInt("AI_TIMEOUT_SECONDS", 90)) * time.Second,
+		AIRateLimit:     getEnvInt("AI_RATE_LIMIT_PER_MINUTE", 10),
 	}
 }
 

@@ -47,3 +47,7 @@ func (repository *PlaceholderAnalysisRepository) FindRecordByID(
 ) (analysisdomain.AnalysisRecord, error) {
 	return analysisdomain.AnalysisRecord{}, port.ErrRepositoryUnavailable
 }
+
+func (repository *PlaceholderAnalysisRepository) Delete(context.Context, string, string) error {
+	return port.ErrRepositoryUnavailable
+}

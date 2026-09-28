@@ -27,19 +27,25 @@
 - 面试 AI 上下文只读取最近 8 条消息，并对 JD、档案、历史消息和当前回答分别限长。
 - `POST /api/v1/ai/interview/report` 的九字段最终报告生成、严格结构校验、报告持久化和 Session 原子完成代码链路；
 - 面试页的报告生成状态、四项评分、总结、优势、不足、推荐复习主题和回答建议展示，以及刷新恢复代码链路。
+- 面试历史列表、进行中会话恢复、报告详情入口；
+- JD 与面试记录删除，并通过 RLS 限制为当前用户自己的数据；
+- Dashboard 的真实 JD 数量、面试数量、最近 7 天记录、最近记录与档案完整度；
+- AI 写接口按认证用户执行单实例固定窗口限流；
+- 五轮状态规则、AI 分析结果校验和限流中间件的基础单元测试。
 
 尚未真实完成：
 
 - Supabase 真实凭据下的完整认证联调；
 - 新增 migration 在目标 Supabase 项目的远端执行，以及真实账号下的 Profile、JD 历史、面试单轮完整联调；
-- 面试历史列表；
-- Dashboard 真实统计及部署验收。
+- 新增 `202609270001_add_history_delete_policies.sql` migration 在目标 Supabase 项目的远端执行；
+- 双账号 RLS、完整五轮面试、历史删除和 Dashboard 的真实环境联调；
+- 公网部署与生产环境端到端验收。
 
 ## 技术栈
 
 前端：Vue 3、TypeScript、Vite、Vue Router、Pinia、Element Plus、Axios、Supabase JS。
 
-后端：Go、Gin。后续按实际业务接入 Supabase Auth、PostgreSQL 和 OpenAI 兼容 LLM API。
+后端：Go、Gin、Supabase Auth、PostgreSQL/PostgREST，以及 OpenAI 兼容 LLM API。
 
 ## 项目目录
 
@@ -133,7 +139,9 @@ JD 分析接口：`POST http://localhost:8080/api/v1/ai/analyze-jd`（需要 Sup
 
 成功响应包含 `overallScore`、`technicalScore`、`expressionScore`、`projectDepthScore`、`strengths`、`weaknesses`、`recommendedTopics`、`answerTips` 和 `summary`。只有五轮问题、回答和反馈均已持久化后才能生成；报告写入与 Session 标记为 `completed` 通过数据库函数原子完成。重复请求已完成的 Session 会返回已保存报告，不会再次调用模型。
 
-JD 历史使用 `GET /api/v1/ai/jd-analyses` 和 `GET /api/v1/ai/jd-analyses/:id`。新环境需要按文件名顺序执行 `supabase/migrations/` 下的 SQL migration。当前尚未完成面试历史列表。
+JD 历史使用 `GET /api/v1/ai/jd-analyses`、`GET /api/v1/ai/jd-analyses/:id` 和 `DELETE /api/v1/ai/jd-analyses/:id`。面试历史使用 `GET /api/v1/ai/interview/sessions`，单场详情与删除分别使用 `GET`、`DELETE /api/v1/ai/interview/sessions/:id`。删除 JD 会通过外键级联删除关联面试。新环境需要按文件名顺序执行 `supabase/migrations/` 下的 SQL migration。
+
+Dashboard 使用 `GET /api/v1/ai/dashboard`，由数据库聚合函数返回精确总数、最近 7 天记录数、档案完整度和最近 5 条记录，不依赖历史列表的分页长度计算。
 
 健康检查响应：
 
@@ -170,9 +178,10 @@ AI_API_BASE_URL=
 AI_API_KEY=
 AI_MODEL=
 AI_TIMEOUT_SECONDS=90
+AI_RATE_LIMIT_PER_MINUTE=10
 ```
 
-`AI_API_BASE_URL` 填 OpenAI 兼容 API 的 `/v1` 基础地址，后端会请求 `/chat/completions`。当认证或 AI 配置缺失时，健康检查仍可启动，业务接口会返回明确的未配置错误，不会生成假结果。
+`AI_API_BASE_URL` 填 OpenAI 兼容 API 的 `/v1` 基础地址，后端会请求 `/chat/completions`。`AI_RATE_LIMIT_PER_MINUTE` 控制单个已认证用户每分钟最多发起的 AI 写请求数，默认 10；当前限流状态保存在单个 Go 实例内，多实例部署时需要由网关或共享存储提供全局限流。当认证或 AI 配置缺失时，健康检查仍可启动，业务接口会返回明确的未配置错误，不会生成假结果。
 
 真实 `.env` 和 `.env.local` 不提交 Git。Supabase service role key、数据库密码和 AI API Key 只能放后端运行环境，不能放入浏览器代码。
 
@@ -188,6 +197,14 @@ cd ../frontend
 npm run typecheck
 npm run build
 ```
+
+## 部署准备
+
+- `frontend/vercel.json` 已配置 Vite 构建产物和 SPA 路由回退，可将 `frontend/` 作为 Vercel Root Directory；
+- `backend/Dockerfile` 可构建非 root 用户运行的 Go 容器；
+- 生产环境需要将 `APP_ENV` 设为 `production`，配置正式 `FRONTEND_ORIGIN`、Supabase 和 AI 环境变量；
+- 部署前必须先执行全部 `supabase/migrations/`，再用两个真实账号验收 RLS；
+- 仓库只提供部署配置，当前未声称已经存在公网部署或生产验收结果。
 
 ## 认证边界
 
