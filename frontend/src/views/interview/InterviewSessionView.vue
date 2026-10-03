@@ -45,7 +45,13 @@ async function loadSession() {
   loading.value = true
   loadError.value = ''
   try {
-    session.value = await getInterviewSession(sessionId.value)
+    const nextSession = await getInterviewSession(sessionId.value)
+    // 刷新发现题目已推进或本轮已作答时，旧草稿不能继续作为新题答案提交。
+    if (session.value && (session.value.currentRound !== nextSession.currentRound ||
+      nextSession.messages.some((message) => message.role === 'candidate' && message.round === nextSession.currentRound))) {
+      answer.value = ''
+    }
+    session.value = nextSession
     await scrollToBottom()
   } catch (error) {
     loadError.value = toUserMessage(error)
@@ -56,10 +62,12 @@ async function loadSession() {
 
 async function handleSubmit() {
   const content = answer.value.trim()
-  if (!canSubmit.value || !content) return
+  if (!canSubmit.value || !content || !session.value) return
+  // 绑定页面上实际看到的题目轮次，避免旧标签页或重试回答到下一题。
+  const expectedRound = session.value.currentRound
   submitting.value = true
   try {
-    await submitInterviewTurn(sessionId.value, content)
+    await submitInterviewTurn({ sessionId: sessionId.value, expectedRound, answer: content })
     answer.value = ''
     await loadSession()
     ElMessage.success('本轮回答与反馈已保存')

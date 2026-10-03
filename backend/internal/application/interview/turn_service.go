@@ -21,8 +21,9 @@ type TurnService struct {
 }
 
 type TurnCommand struct {
-	SessionID string
-	Answer    string
+	SessionID     string
+	ExpectedRound int
+	Answer        string
 }
 
 type TurnOutput struct {
@@ -43,14 +44,17 @@ func (service *TurnService) Execute(ctx context.Context, userID string, command 
 	userID = strings.TrimSpace(userID)
 	sessionID := strings.TrimSpace(command.SessionID)
 	answerContent := strings.TrimSpace(command.Answer)
-	if userID == "" || !isUUID(sessionID) || answerContent == "" || utf8.RuneCountInString(answerContent) > 10000 {
+	if userID == "" || !isUUID(sessionID) || answerContent == "" || utf8.RuneCountInString(answerContent) > 10000 ||
+		command.ExpectedRound < 1 || command.ExpectedRound > interviewdomain.MaxRounds {
 		return TurnOutput{}, ErrInvalidInterviewTurnCommand
 	}
 	turnContext, err := service.repository.FindTurnContext(ctx, userID, sessionID)
 	if err != nil {
 		return TurnOutput{}, err
 	}
-	if !turnContext.Session.CanAcceptAnswer() || hasCandidateAnswer(turnContext.Messages, turnContext.Session.CurrentRound()) {
+	// 在调用模型前拒绝旧轮次；持久化时仍由数据库事务校验同一轮次，防止并发推进。
+	if command.ExpectedRound != turnContext.Session.CurrentRound() ||
+		!turnContext.Session.CanAcceptAnswer() || hasCandidateAnswer(turnContext.Messages, command.ExpectedRound) {
 		return TurnOutput{}, ErrInterviewTurnUnavailable
 	}
 	generateNextQuestion := turnContext.Session.CanContinue()
@@ -61,7 +65,7 @@ func (service *TurnService) Execute(ctx context.Context, userID string, command 
 	if err != nil {
 		return TurnOutput{}, err
 	}
-	answeredRound := turnContext.Session.CurrentRound()
+	answeredRound := command.ExpectedRound
 	answer, err := interviewdomain.NewInterviewMessage(interviewdomain.InterviewMessageParams{
 		SessionID: sessionID, UserID: userID, Role: interviewdomain.InterviewMessageRoleCandidate,
 		Round: answeredRound, Content: answerContent,

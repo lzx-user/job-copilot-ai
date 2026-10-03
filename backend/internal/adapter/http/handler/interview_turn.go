@@ -29,8 +29,9 @@ func (handler *InterviewTurnHandler) Handle(ctx *gin.Context) {
 		return
 	}
 	var request struct {
-		SessionID string `json:"sessionId"`
-		Answer    string `json:"answer"`
+		SessionID     string `json:"sessionId"`
+		ExpectedRound int    `json:"expectedRound"`
+		Answer        string `json:"answer"`
 	}
 	ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, maxInterviewTurnRequestBytes)
 	if err := ctx.ShouldBindJSON(&request); err != nil {
@@ -38,7 +39,7 @@ func (handler *InterviewTurnHandler) Handle(ctx *gin.Context) {
 		return
 	}
 	output, err := handler.service.Execute(ctx.Request.Context(), userID, interviewapp.TurnCommand{
-		SessionID: request.SessionID, Answer: request.Answer,
+		SessionID: request.SessionID, ExpectedRound: request.ExpectedRound, Answer: request.Answer,
 	})
 	if err != nil {
 		handleInterviewTurnError(ctx, err)
@@ -60,9 +61,9 @@ func handleInterviewTurnError(ctx *gin.Context, err error) {
 	log.Printf("interview turn failed: %v", err)
 	switch {
 	case errors.Is(err, interviewapp.ErrInvalidInterviewTurnCommand):
-		response.Error(ctx, http.StatusBadRequest, "INVALID_ARGUMENT", "请检查会话 ID 和回答内容")
+		response.Error(ctx, http.StatusBadRequest, "INVALID_ARGUMENT", "请检查会话 ID、回答轮次（1～5）和回答内容")
 	case errors.Is(err, interviewapp.ErrInterviewTurnUnavailable), errors.Is(err, port.ErrRepositoryConflict):
-		response.Error(ctx, http.StatusConflict, "INTERVIEW_CONFLICT", "当前轮次已提交或暂不能继续")
+		response.Error(ctx, http.StatusConflict, "INTERVIEW_CONFLICT", "当前轮次已提交或已变化，请刷新面试后再回答")
 	case errors.Is(err, port.ErrRepositoryNotFound):
 		response.Error(ctx, http.StatusNotFound, "NOT_FOUND", "未找到该面试会话")
 	case errors.Is(err, port.ErrAIUnavailable):
