@@ -38,7 +38,7 @@ const canSubmit = computed(() => Boolean(
 const canGenerateReport = computed(() => Boolean(
   session.value?.status === 'in_progress' &&
   session.value.currentRound === session.value.maxRounds &&
-  currentRoundAnswered.value && !generatingReport.value,
+  currentRoundAnswered.value,
 ))
 
 async function loadSession() {
@@ -79,7 +79,7 @@ async function handleSubmit() {
 }
 
 async function handleGenerateReport() {
-  if (!canGenerateReport.value) return
+  if (!canGenerateReport.value || generatingReport.value) return
   generatingReport.value = true
   try {
     await generateInterviewReport(sessionId.value)
@@ -148,7 +148,7 @@ onMounted(loadSession)
 
         <section v-if="canGenerateReport" class="panel report-action">
           <div><h2>完成面试复盘</h2><p>AI 将基于岗位信息和完整五轮问答生成结构化报告；报告保存成功后，本场面试才会标记完成。</p></div>
-          <el-button class="gradient-button" :loading="generatingReport" @click="handleGenerateReport">生成最终报告</el-button>
+          <el-button class="gradient-button" :loading="generatingReport" @click="handleGenerateReport">{{ generatingReport ? 'AI 正在生成最终报告…' : '生成最终报告' }}</el-button>
         </section>
 
         <section v-if="session.report" class="panel report-panel">
