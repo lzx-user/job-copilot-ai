@@ -123,11 +123,12 @@ JD 分析接口：`POST http://localhost:8080/api/v1/ai/analyze-jd`（需要 Sup
 ```json
 {
   "sessionId": "当前用户进行中的面试会话 UUID",
+  "expectedRound": 1,
   "answer": "本轮回答"
 }
 ```
 
-成功响应包含 `score`、`feedback`、`strengths`、`improvements`、`nextQuestion` 和推进后的轮次。第 1～4 轮会原子保存回答、反馈、下一题与新轮次；第 5 轮保存回答和反馈后 `nextQuestion` 为 `null`。相同轮次重复提交会返回冲突。`GET /api/v1/ai/interview/sessions/:id` 用于刷新恢复。
+成功响应包含 `score`、`feedback`、`strengths`、`improvements`、`nextQuestion` 和推进后的轮次。第 1～4 轮会原子保存回答、反馈、下一题与新轮次；第 5 轮保存回答和反馈后 `nextQuestion` 为 `null`。`expectedRound` 必填，取页面当前题目的轮次（1～5）；缺失或越界返回 400，旧轮次或重复提交返回 409，不会当作下一题的回答。客户端重试必须保留原轮次，遇到冲突先刷新会话并核对题目。前后端需同步更新，旧版客户端缺少此字段会被拒绝。`GET /api/v1/ai/interview/sessions/:id` 用于刷新恢复。
 
 生成最终报告：`POST http://localhost:8080/api/v1/ai/interview/report`（需要 Supabase access token），请求体为：
 
@@ -141,7 +142,7 @@ JD 分析接口：`POST http://localhost:8080/api/v1/ai/analyze-jd`（需要 Sup
 
 JD 历史使用 `GET /api/v1/ai/jd-analyses`、`GET /api/v1/ai/jd-analyses/:id` 和 `DELETE /api/v1/ai/jd-analyses/:id`。面试历史使用 `GET /api/v1/ai/interview/sessions`，单场详情与删除分别使用 `GET`、`DELETE /api/v1/ai/interview/sessions/:id`。删除 JD 会通过外键级联删除关联面试。新环境需要按文件名顺序执行 `supabase/migrations/` 下的 SQL migration。
 
-Dashboard 使用 `GET /api/v1/ai/dashboard`，由数据库聚合函数返回精确总数、最近 7 天记录数、档案完整度和最近 5 条记录，不依赖历史列表的分页长度计算。
+Dashboard 使用 `GET /api/v1/ai/dashboard`，由数据库聚合函数返回精确总数、最近 7 天记录数、档案完整度和最近 5 条记录，不依赖历史列表的分页长度计算。Profile 与 Dashboard 的完整度统一为基础信息、至少 5 个技能、至少 100 字项目摘要、至少 50 字个人优势各 25%；Profile 预览当前表单，Dashboard 统计已保存档案。
 
 健康检查响应：
 
@@ -163,7 +164,12 @@ VITE_APP_NAME=求职陪跑 AI 助手
 VITE_API_BASE_URL=http://localhost:8080/api/v1
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
+SUPABASE_PROXY_URL=
 ```
+
+本地网络需要代理才能访问 Supabase 时，在 `frontend/.env.local` 设置 `SUPABASE_PROXY_URL=http://127.0.0.1:你的代理端口`。该变量只供 Vite 开发服务器使用，不使用 `VITE_` 前缀，生产构建仍直连 Supabase。修改后重启前端。仅打开浏览器系统代理或设置 `HTTPS_PROXY` 不会让 Vite 的反向代理自动使用出站代理。
+
+Go 后端使用标准 HTTP 客户端，可在 `backend/.env` 设置 `HTTPS_PROXY=http://127.0.0.1:你的代理端口` 和 `NO_PROXY=localhost,127.0.0.1,::1`，然后重启后端。如果模型域名直连正常、经代理调用超时，可只把该模型域名追加到 `NO_PROXY`，保留 Supabase 等服务所需的代理。认证接口可用不代表业务数据库已完成迁移；远端必须包含 `interview_reports` 表和 `get_dashboard_summary()` 函数，Dashboard 才能读取统计。
 
 后端：
 
@@ -201,6 +207,7 @@ npm run build
 ## 部署准备
 
 - `frontend/vercel.json` 已配置 Vite 构建产物和 SPA 路由回退，可将 `frontend/` 作为 Vercel Root Directory；
+- 前端构建必须显式设置 `VITE_API_BASE_URL`，缺失时构建会失败；本地预览可设为 `http://localhost:8080/api/v1`，生产构建必须替换为正式后端 HTTPS 地址（包含 `/api/v1`），更改后重新构建；
 - `backend/Dockerfile` 可构建非 root 用户运行的 Go 容器；
 - 生产环境需要将 `APP_ENV` 设为 `production`，配置正式 `FRONTEND_ORIGIN`、Supabase 和 AI 环境变量；
 - 部署前必须先执行全部 `supabase/migrations/`，再用两个真实账号验收 RLS；

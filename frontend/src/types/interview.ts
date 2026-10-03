@@ -44,6 +44,12 @@ export interface InterviewSessionDetail {
   report: InterviewReport | null
 }
 
+export interface InterviewTurnRequest {
+  sessionId: string
+  expectedRound: number
+  answer: string
+}
+
 export interface InterviewTurnResult extends InterviewFeedback {
   sessionId: string
   currentRound: number

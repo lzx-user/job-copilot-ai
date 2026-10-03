@@ -1,4 +1,5 @@
 import { AxiosError } from 'axios'
+import { isAuthError } from '@supabase/supabase-js'
 
 const AUTH_ERROR_MESSAGES: Array<[RegExp, string]> = [
   [/invalid login credentials/i, '邮箱或密码错误，请检查后重试'],
@@ -11,6 +12,9 @@ const AUTH_ERROR_MESSAGES: Array<[RegExp, string]> = [
 
 /** 把第三方英文错误转换成用户能理解、且不会泄露服务端细节的中文提示。 */
 export function toUserMessage(error: unknown): string {
+  if (isAuthError(error) && error.status !== undefined && error.status >= 500) {
+    return '无法连接 Supabase 认证服务，请检查项目状态和开发服务器的网络代理'
+  }
   if (error instanceof AxiosError) {
     if (error.code === 'ECONNABORTED') return '请求超时，请稍后重试'
     if (!error.response) return '网络连接异常，请检查后重试'

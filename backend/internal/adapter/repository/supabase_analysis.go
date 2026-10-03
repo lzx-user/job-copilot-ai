@@ -75,7 +75,23 @@ func (repository *SupabaseAnalysisRepository) Save(
 		return "", port.ErrUnauthenticated
 	}
 
-	payload, err := json.Marshal(analysisRow{
+	// 新增记录只提交业务字段，id 和 created_at 由数据库默认值生成。
+	payload, err := json.Marshal(struct {
+		UserID            string   `json:"user_id"`
+		CompanyName       string   `json:"company_name"`
+		JobTitle          string   `json:"job_title"`
+		JDContent         string   `json:"jd_content"`
+		ResumeSummary     string   `json:"resume_summary"`
+		Skills            []string `json:"skills"`
+		MatchScore        int      `json:"match_score"`
+		JobSummary        string   `json:"job_summary"`
+		CoreRequirements  []string `json:"core_requirements"`
+		MatchedSkills     []string `json:"matched_skills"`
+		MissingSkills     []string `json:"missing_skills"`
+		ResumeSuggestions []string `json:"resume_suggestions"`
+		PreparationTopics []string `json:"preparation_topics"`
+		GreetingMessage   string   `json:"greeting_message"`
+	}{
 		UserID:            userID,
 		CompanyName:       request.CompanyName(),
 		JobTitle:          request.JobTitle(),

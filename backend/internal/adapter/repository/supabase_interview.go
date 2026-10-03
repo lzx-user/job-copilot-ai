@@ -633,7 +633,8 @@ func (repository *SupabaseInterviewRepository) findMessages(
 	query.Set("session_id", "eq."+sessionID)
 	query.Set("user_id", "eq."+userID)
 	query.Set("select", "id,role,round,content,created_at,score,feedback,strengths,improvements")
-	query.Set("order", "created_at.desc")
+	// 同一事务的回答和下一题时间相同；先取最近轮次，反转后按每轮问题、回答展示。
+	query.Set("order", "round.desc,role.asc")
 	query.Set("limit", fmt.Sprint(limit))
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, repository.baseURL+"/interview_messages?"+query.Encode(), nil)
 	if err != nil {

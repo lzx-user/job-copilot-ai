@@ -69,6 +69,11 @@ function normalizeProfile(profile: CandidateProfile): CandidateProfile {
 
 function validateProfile(profile: CandidateProfile): string | null {
   const normalizedProfile = normalizeProfile(profile)
+  if (normalizedProfile.graduationYear && (
+    !/^\d{4}$/.test(normalizedProfile.graduationYear) ||
+    Number(normalizedProfile.graduationYear) < 2000 ||
+    Number(normalizedProfile.graduationYear) > 2100
+  )) return '毕业年份应为 2000～2100 之间的四位整数，或留空'
   if (!normalizedProfile.targetRoles.length) return '请至少填写一个目标岗位'
   if (!normalizedProfile.skills.length) return '请至少填写一个技能'
   if (normalizedProfile.skills.length > 30) return '技能数量不能超过 30 个'
@@ -95,8 +100,9 @@ const completenessStatusItems = computed<CompletenessStatusItem[]>(() => {
     Boolean(profile.availability)
 
   const skillsCompleted = profile.skills.length >= 5
-  const projectCompleted = profile.projectSummary.length >= 100
-  const strengthsCompleted = profile.strengths.length >= 50
+  // 按 Unicode 字符计数，与数据库 char_length 的完整度规则一致。
+  const projectCompleted = Array.from(profile.projectSummary).length >= 100
+  const strengthsCompleted = Array.from(profile.strengths).length >= 50
 
   return [
     {
@@ -122,22 +128,10 @@ const completenessStatusItems = computed<CompletenessStatusItem[]>(() => {
   ]
 })
 
-function calculateCompleteness(profile: CandidateProfile): number {
-  let score = 0
-  const normalizedProfile = normalizeProfile(profile)
-  if (normalizedProfile.nickname.length > 0) score += 10
-  if (normalizedProfile.targetRoles.length > 0) score += 15
-  if (normalizedProfile.expectedCities.length > 0) score += 10
-  if (normalizedProfile.skills.length >= 5) score += 20
-  if (normalizedProfile.projectSummary.length >= 100) score += 25
-  if (normalizedProfile.strengths.length >= 50) score += 10
-  if (normalizedProfile.availability.length > 0) score += 10
-  return score
-}
-
-const completeness = computed(() => {
-  return calculateCompleteness(profileForm)
-})
+// 复用页面的四项完成状态，与 get_dashboard_summary 每项 25% 保持一致。
+const completeness = computed(() =>
+  completenessStatusItems.value.filter((item) => item.completed).length * 25,
+)
 
 const completenessLabel = computed(() => {
   if (completeness.value === 100) return '已完善'
