@@ -3,8 +3,9 @@ import { InfoFilled, MagicStick, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { analyzeJD } from '../../api/jd-analysis.api'
+import { analyzeJD, getJDAnalysis } from '../../api/jd-analysis.api'
 import AppEmpty from '../../components/common/AppEmpty.vue'
+import { useAuthStore } from '../../stores/auth.store'
 import { useProfileStore } from '../../stores/profile.store'
 import type { JdAnalysisResult } from '../../types/jd-analysis'
 import { toUserMessage } from '../../utils/error'
@@ -17,20 +18,91 @@ interface JdDraft {
   skills: string[]
 }
 
+interface SavedPageState {
+  draft: JdDraft
+  analysisId: string | null
+  profileApplied: boolean
+}
+
+const authStore = useAuthStore()
 const profileStore = useProfileStore()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
 const analysisResult = ref<JdAnalysisResult | null>(null)
 const analysisError = ref('')
-let hasAppliedProfile = false
+const draftUserId = authStore.user?.id
+const draftStorageKey = draftUserId ? `jd-analysis:${draftUserId}` : ''
 
-const form = reactive<JdDraft>({
+function readSavedPageState(): SavedPageState | null {
+  if (!draftStorageKey) return null
+  try {
+    const raw = sessionStorage.getItem(draftStorageKey)
+    if (!raw) return null
+    const value: unknown = JSON.parse(raw)
+    if (!value || typeof value !== 'object' || !('draft' in value)) return null
+    const draft = value.draft
+    if (!draft || typeof draft !== 'object' ||
+      !('companyName' in draft) || typeof draft.companyName !== 'string' ||
+      !('jobTitle' in draft) || typeof draft.jobTitle !== 'string' ||
+      !('jdContent' in draft) || typeof draft.jdContent !== 'string' ||
+      !('resumeSummary' in draft) || typeof draft.resumeSummary !== 'string' ||
+      !('skills' in draft) || !Array.isArray(draft.skills) ||
+      !draft.skills.every((skill) => typeof skill === 'string')) return null
+    const analysisId = 'analysisId' in value && typeof value.analysisId === 'string'
+      ? value.analysisId : null
+    const profileApplied = 'profileApplied' in value && value.profileApplied === true
+    return { draft: draft as JdDraft, analysisId, profileApplied }
+  } catch {
+    return null
+  }
+}
+
+const savedPageState = readSavedPageState()
+let hasAppliedProfile = savedPageState?.profileApplied ?? false
+let currentAnalysisId = savedPageState?.analysisId ?? null
+const restoringResult = ref(Boolean(currentAnalysisId))
+
+const form = reactive<JdDraft>(savedPageState?.draft ?? {
   companyName: '',
   jobTitle: '',
   jdContent: '',
   resumeSummary: '',
   skills: [],
 })
+
+function savePageState() {
+  if (!draftStorageKey || authStore.user?.id !== draftUserId) return
+  try {
+    sessionStorage.setItem(draftStorageKey, JSON.stringify({
+      draft: {
+        companyName: form.companyName,
+        jobTitle: form.jobTitle,
+        jdContent: form.jdContent,
+        resumeSummary: form.resumeSummary,
+        skills: [...form.skills],
+      },
+      analysisId: currentAnalysisId,
+      profileApplied: hasAppliedProfile,
+    } satisfies SavedPageState))
+  } catch {
+    // 浏览器禁用暂存时仍允许正常填写和提交。
+  }
+}
+
+watch(form, savePageState)
+
+async function restoreAnalysis(analysisId: string) {
+  try {
+    const result = await getJDAnalysis(analysisId)
+    if (currentAnalysisId === analysisId) analysisResult.value = result
+  } catch {
+    if (currentAnalysisId === analysisId) {
+      analysisError.value = '上次分析结果暂时无法恢复，请到历史记录查看或稍后刷新。'
+    }
+  } finally {
+    restoringResult.value = false
+  }
+}
 
 const rules: FormRules<JdDraft> = {
   companyName: [
@@ -91,6 +163,7 @@ watch(
 )
 
 onMounted(async () => {
+  if (currentAnalysisId) void restoreAnalysis(currentAnalysisId)
   if (!profileStore.loaded) await profileStore.fetchProfile()
   applyProfileToDraft()
 })
@@ -121,8 +194,11 @@ async function handleAnalyze() {
   }
 
   submitting.value = true
+  restoringResult.value = false
   analysisResult.value = null
   analysisError.value = ''
+  currentAnalysisId = null
+  savePageState()
 
   try {
     analysisResult.value = await analyzeJD({
@@ -132,6 +208,8 @@ async function handleAnalyze() {
       resumeSummary: form.resumeSummary,
       skills: form.skills,
     })
+    currentAnalysisId = analysisResult.value.analysisId
+    savePageState()
     ElMessage.success('分析完成并已保存')
   } catch (error) {
     analysisError.value = toUserMessage(error)
@@ -165,7 +243,7 @@ async function handleAnalyze() {
       <section class="panel form-panel">
         <div class="panel-header">
           <h2 class="panel-title">岗位信息</h2>
-          <span class="draft-badge">草稿未保存</span>
+          <span class="draft-badge">本标签页自动暂存</span>
         </div>
 
         <el-form
@@ -237,7 +315,7 @@ async function handleAnalyze() {
         </el-form>
       </section>
 
-      <section v-loading="submitting" class="panel result-panel">
+      <section v-loading="submitting || restoringResult" class="panel result-panel">
         <div class="result-header">
           <div>
             <h2 class="panel-title">匹配分析结果</h2>
@@ -245,7 +323,7 @@ async function handleAnalyze() {
           </div>
           <span class="result-chip">
             <el-icon><Search /></el-icon>
-            {{ analysisResult ? '分析已保存' : '等待分析' }}
+            {{ restoringResult ? '恢复结果中' : analysisResult ? '分析已保存' : '等待分析' }}
           </span>
         </div>
 
@@ -308,8 +386,8 @@ async function handleAnalyze() {
         </div>
 
         <AppEmpty
-          v-else
-          :title="analysisError ? '本次分析未完成' : '还没有分析结果'"
+          v-else-if="!restoringResult"
+          :title="analysisError ? '暂时无法显示分析结果' : '还没有分析结果'"
           :description="analysisError ? '请根据上方提示检查服务状态后重试。' : '填写公司、岗位、JD、个人经历摘要与技术栈，然后开始真实分析。'"
           icon="⌕"
         />
@@ -341,11 +419,13 @@ async function handleAnalyze() {
 .score-summary { display: flex; padding: 20px; align-items: center; gap: 24px; border-radius: 14px; background: linear-gradient(135deg,#f2f7ff,#f8f5ff); }
 .score-summary h3 { margin: 0 0 8px; font-size: 20px; }
 .score-summary p { margin: 0; color: var(--text-secondary); line-height: 1.7; }
-.result-section { padding: 18px; border: 1px solid var(--border-color); border-radius: 12px; background: #fff; }
+.result-section { min-width: 0; padding: 18px; border: 1px solid var(--border-color); border-radius: 12px; background: #fff; }
 .result-section h3 { margin: 0 0 12px; font-size: 15px; }
 .result-section ul,.result-section ol { display: grid; margin: 0; padding-left: 20px; gap: 8px; color: var(--text-secondary); line-height: 1.6; }
 .skill-groups { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
-.tag-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag-list { display: flex; min-width: 0; flex-wrap: wrap; gap: 8px; }
+.tag-list :deep(.el-tag) { max-width: 100%; height: auto; min-height: 24px; padding-top: 3px; padding-bottom: 3px; }
+.tag-list :deep(.el-tag__content) { white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
 .empty-copy { margin: 0; color: var(--text-secondary); font-size: 13px; }
 .disclaimer { margin-top: auto; padding: 14px; border-radius: 10px; color: var(--text-secondary); background: #f8f9fd; font-size: 12px; text-align: center; }
 
