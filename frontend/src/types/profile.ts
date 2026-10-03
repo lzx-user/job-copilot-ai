@@ -20,7 +20,7 @@ export interface ProfileRow {
   project_summary: string
   strengths: string
   availability: string
-  graduation_year: string | null
+  graduation_year: number | null
   created_at: string
   updated_at: string
 }

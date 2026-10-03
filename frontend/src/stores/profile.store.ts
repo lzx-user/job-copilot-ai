@@ -32,7 +32,7 @@ function toCandidateProfile(row: ProfileRow): CandidateProfile {
     projectSummary: row.project_summary,
     strengths: row.strengths,
     availability: row.availability,
-    graduationYear: row.graduation_year ?? '',
+    graduationYear: row.graduation_year == null ? '' : String(row.graduation_year),
   }
 }
 
@@ -176,7 +176,9 @@ export const useProfileStore = defineStore('profile', () => {
             project_summary: nextProfile.projectSummary.trim(),
             strengths: nextProfile.strengths.trim(),
             availability: nextProfile.availability.trim(),
-            graduation_year: nextProfile.graduationYear.trim() || null,
+            graduation_year: nextProfile.graduationYear.trim()
+              ? Number(nextProfile.graduationYear.trim())
+              : null,
           },
           {
             onConflict: 'user_id',
