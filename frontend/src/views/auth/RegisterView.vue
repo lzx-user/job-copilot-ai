@@ -69,8 +69,8 @@ async function submitRegister() {
     return
   }
 
-  ElMessage.success('注册成功，欢迎加入')
-  await router.replace('/app/dashboard')
+  ElMessage.success('注册成功，请登录')
+  await router.replace({ path: '/auth/login', query: { email: form.email.trim() } })
 }
 </script>
 

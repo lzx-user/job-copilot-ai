@@ -96,8 +96,13 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const { data, error } = await supabase.auth.signUp({ email, password })
       if (error) throw error
-      session.value = data.session
-      user.value = data.user
+      // 关闭邮箱确认时 Supabase 会在注册后直接创建 Session；注册流程仍应回到登录页。
+      if (data.session) {
+        const { error: signOutError } = await supabase.auth.signOut()
+        if (signOutError) throw signOutError
+      }
+      session.value = null
+      user.value = null
       return {
         success: true,
         requiresEmailConfirmation: !data.session,
