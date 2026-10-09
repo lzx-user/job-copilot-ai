@@ -25,15 +25,21 @@ const loadError = ref('')
 const summary = ref<DashboardSummary>({
   jdCount: 0,
   interviewCount: 0,
+  applicationCount: 0,
+  activeApplicationCount: 0,
+  realInterviewCount: 0,
+  offerCount: 0,
+  applicationToInterviewRate: 0,
+  interviewToOfferRate: 0,
   weeklyRecordCount: 0,
   profileCompleteness: 0,
   recentRecords: [],
 })
 
 const stats = computed<StatItem[]>(() => [
-  { label: '已分析 JD', value: summary.value.jdCount, hint: summary.value.jdCount ? '已保存到历史记录' : '等待首次分析', icon: DocumentChecked, tone: 'blue' },
-  { label: '模拟面试次数', value: summary.value.interviewCount, hint: summary.value.interviewCount ? '包含进行中与已完成' : '等待首次练习', icon: Microphone, tone: 'violet' },
-  { label: '本周新增记录', value: summary.value.weeklyRecordCount, hint: '最近 7 天创建', icon: TrendCharts, tone: 'green' },
+  { label: '真实投递', value: summary.value.applicationCount, hint: `${summary.value.activeApplicationCount} 个正在推进`, icon: DocumentChecked, tone: 'blue' },
+  { label: '真实面试轮次', value: summary.value.realInterviewCount, hint: `投递转面试 ${summary.value.applicationToInterviewRate}%`, icon: Microphone, tone: 'violet' },
+  { label: 'Offer', value: summary.value.offerCount, hint: `面试转 Offer ${summary.value.interviewToOfferRate}%`, icon: TrendCharts, tone: 'green' },
   { label: '档案完整度', value: summary.value.profileCompleteness, hint: summary.value.profileCompleteness === 100 ? '档案已完善' : '继续补充真实经历', icon: User, tone: 'orange' },
 ])
 
@@ -55,11 +61,14 @@ const recentRecords = computed<RecentRecord[]>(() => summary.value.recentRecords
   path: record.kind === 'jd' ? '/app/history' : `/app/interviews/${record.id}`,
 })))
 
-const plans = [
-  { title: '了解个人档案需要准备的内容', status: '建议', path: '/app/profile' },
-  { title: '准备一份目标岗位 JD', status: '待准备', path: '/app/jd-analysis' },
-  { title: '浏览模拟面试流程', status: '待了解', path: '/app/interviews' },
-]
+const plans = computed(() => {
+  const items = []
+  if (summary.value.profileCompleteness < 100) items.push({ title: '继续完善个人档案', status: `${summary.value.profileCompleteness}%`, path: '/app/profile' })
+  if (summary.value.applicationCount === 0) items.push({ title: '建立第一个目标岗位与投递', status: '优先', path: '/app/opportunities' })
+  if (summary.value.jdCount === 0) items.push({ title: '完成第一份岗位匹配分析', status: '待完成', path: '/app/jd-analysis' })
+  if (summary.value.interviewCount === 0) items.push({ title: '完成一次针对性模拟面试', status: '待完成', path: '/app/interviews' })
+  return items.slice(0, 3)
+})
 
 async function loadDashboard() {
   loading.value = true
@@ -110,10 +119,10 @@ onMounted(loadDashboard)
           <article class="shortcut shortcut-analysis">
             <div>
               <span class="section-label">岗位准备</span>
-              <h2>开始 JD 分析</h2>
-              <p>拆解岗位要求，提前整理你的能力证据。</p>
+            <h2>管理岗位与投递</h2>
+              <p>从目标岗位开始，持续记录真实求职进展。</p>
               <ul><li>岗位需求拆解</li><li>技能关键词整理</li><li>匹配度评估建议</li></ul>
-              <el-button class="gradient-button" @click="router.push('/app/jd-analysis')">查看分析页 <el-icon><Right /></el-icon></el-button>
+              <el-button class="gradient-button" @click="router.push('/app/opportunities')">进入岗位工作台 <el-icon><Right /></el-icon></el-button>
             </div>
             <div class="shortcut-icon"><el-icon><DocumentChecked /></el-icon></div>
           </article>
@@ -151,13 +160,14 @@ onMounted(loadDashboard)
         <section class="panel plan-panel">
           <div class="panel-header">
             <h2 class="panel-title"><el-icon><Calendar /></el-icon> 今日计划</h2>
-            <span class="muted">0 / 3</span>
+            <span class="muted">{{ plans.length }} 项建议</span>
           </div>
           <button v-for="plan in plans" :key="plan.title" class="plan-row" @click="router.push(plan.path)">
             <span class="plan-check" />
             <span>{{ plan.title }}</span>
             <small>{{ plan.status }}</small>
           </button>
+          <p v-if="!plans.length" class="plan-complete">核心准备已完成，继续推进真实投递并记录结果。</p>
         </section>
 
         <section class="panel suggestion-panel">
@@ -245,6 +255,7 @@ onMounted(loadDashboard)
 .plan-row:hover > span:nth-child(2) { color: var(--color-primary); }
 .plan-check { width: 17px; height: 17px; border: 1.5px solid #cdd5e6; border-radius: 5px; }
 .plan-row small { color: var(--text-secondary); }
+.plan-complete { color: var(--text-secondary); line-height: 1.7; }
 .suggestion-panel,.stage-panel { display: flex; padding: 20px; gap: 14px; }
 .suggestion-icon { display: grid; flex: 0 0 38px; width: 38px; height: 38px; place-items: center; border-radius: 12px; color: var(--color-secondary); background: #f0eaff; }
 .suggestion-panel h3 { margin-bottom: 5px; }

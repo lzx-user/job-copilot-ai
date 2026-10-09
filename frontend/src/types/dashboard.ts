@@ -10,6 +10,12 @@ export interface DashboardRecentRecord {
 export interface DashboardSummary {
   jdCount: number
   interviewCount: number
+  applicationCount: number
+  activeApplicationCount: number
+  realInterviewCount: number
+  offerCount: number
+  applicationToInterviewRate: number
+  interviewToOfferRate: number
   weeklyRecordCount: number
   profileCompleteness: number
   recentRecords: DashboardRecentRecord[]

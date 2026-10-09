@@ -3,6 +3,8 @@ import { InfoFilled, MagicStick, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { getCareerWorkspace } from '../../api/career.api'
 import { analyzeJD, getJDAnalysis } from '../../api/jd-analysis.api'
 import AppEmpty from '../../components/common/AppEmpty.vue'
 import { useAuthStore } from '../../stores/auth.store'
@@ -25,6 +27,7 @@ interface SavedPageState {
 }
 
 const authStore = useAuthStore()
+const route = useRoute()
 const profileStore = useProfileStore()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
@@ -61,6 +64,9 @@ const savedPageState = readSavedPageState()
 let hasAppliedProfile = savedPageState?.profileApplied ?? false
 let currentAnalysisId = savedPageState?.analysisId ?? null
 const restoringResult = ref(Boolean(currentAnalysisId))
+const linkedJobId = ref('')
+const linkedJDVersionId = ref('')
+const linkedResumeVersionId = ref('')
 
 const form = reactive<JdDraft>(savedPageState?.draft ?? {
   companyName: '',
@@ -166,6 +172,32 @@ onMounted(async () => {
   if (currentAnalysisId) void restoreAnalysis(currentAnalysisId)
   if (!profileStore.loaded) await profileStore.fetchProfile()
   applyProfileToDraft()
+
+	const jobId = typeof route.query.jobId === 'string' ? route.query.jobId : ''
+	if (jobId) {
+		try {
+			const workspace = await getCareerWorkspace()
+			const job = workspace.jobs.find((item) => item.id === jobId)
+			const jdVersionId = typeof route.query.jdVersionId === 'string' ? route.query.jdVersionId : ''
+			const jdVersion = job?.jdVersions.find((item) => item.id === jdVersionId) ?? job?.jdVersions[0]
+			const resumeVersionId = typeof route.query.resumeVersionId === 'string' ? route.query.resumeVersionId : ''
+			const resumeVersion = workspace.resumes.flatMap((item) => item.versions).find((item) => item.id === resumeVersionId)
+			if (job && jdVersion) {
+				form.companyName = job.companyName
+				form.jobTitle = job.jobTitle
+				form.jdContent = jdVersion.content
+				linkedJobId.value = job.id
+				linkedJDVersionId.value = jdVersion.id
+			}
+			if (resumeVersion) {
+				form.resumeSummary = (resumeVersion.projectSummary || resumeVersion.content).slice(0, 5000)
+				form.skills = [...resumeVersion.skills]
+				linkedResumeVersionId.value = resumeVersion.id
+			}
+		} catch (error) {
+			analysisError.value = `岗位信息未能自动带入：${toUserMessage(error)}`
+		}
+	}
 })
 
 function normalizeSkills(values: string[]) {
@@ -207,6 +239,9 @@ async function handleAnalyze() {
       jdContent: form.jdContent,
       resumeSummary: form.resumeSummary,
       skills: form.skills,
+      jobId: linkedJobId.value || undefined,
+      jobJdVersionId: linkedJDVersionId.value || undefined,
+      resumeVersionId: linkedResumeVersionId.value || undefined,
     })
     currentAnalysisId = analysisResult.value.analysisId
     savePageState()

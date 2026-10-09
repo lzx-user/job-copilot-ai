@@ -28,6 +28,9 @@ const router = createRouter({
       children: [
         { path: '', redirect: '/app/dashboard' },
         { path: 'dashboard', name: 'dashboard', component: () => import('../views/dashboard/DashboardView.vue') },
+        { path: 'opportunities', name: 'opportunities', component: () => import('../views/opportunity/OpportunityListView.vue') },
+        { path: 'opportunities/:id', name: 'opportunity-detail', component: () => import('../views/opportunity/OpportunityDetailView.vue') },
+        { path: 'resumes', name: 'resumes', component: () => import('../views/resume/ResumeListView.vue') },
         { path: 'jd-analysis', name: 'jd-analysis', component: () => import('../views/jd-analysis/JdAnalysisView.vue') },
         { path: 'interviews', name: 'interviews', component: () => import('../views/interview/InterviewListView.vue') },
         { path: 'interviews/:id', name: 'interview-session', component: () => import('../views/interview/InterviewSessionView.vue') },
@@ -68,4 +71,3 @@ router.beforeEach(async (to) => {
 })
 
 export default router
-

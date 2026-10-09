@@ -31,7 +31,7 @@ defineProps<Props>()
         <span class="orbit-dot dot-a" />
         <span class="orbit-dot dot-b" />
       </div>
-      <p class="stage-note">当前版本完成登录基础设施与页面骨架，AI 业务将在后续阶段接入。</p>
+      <p class="stage-note">从岗位匹配、模拟面试到投递复盘，用真实记录沉淀完整求职过程。</p>
     </section>
 
     <section class="form-panel">
@@ -294,4 +294,3 @@ defineProps<Props>()
   }
 }
 </style>
-

@@ -18,6 +18,8 @@ export interface StartInterviewResult {
   question: string
 }
 
+export type InterviewType = 'technical' | 'project' | 'comprehensive'
+
 export interface InterviewFeedback {
   score: number
   feedback: string

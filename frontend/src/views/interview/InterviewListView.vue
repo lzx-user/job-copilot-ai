@@ -3,10 +3,10 @@ import { Briefcase, ChatDotRound, Microphone, Reading } from '@element-plus/icon
 import { ElMessage } from 'element-plus'
 import type { Component } from 'vue'
 import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { listInterviewOptions, startInterview } from '../../api/interview.api'
 import AppEmpty from '../../components/common/AppEmpty.vue'
-import type { InterviewOption } from '../../types/interview'
+import type { InterviewOption, InterviewType } from '../../types/interview'
 import { toUserMessage } from '../../utils/error'
 
 interface InterviewMode {
@@ -14,18 +14,21 @@ interface InterviewMode {
   description: string
   icon: Component
   tone: string
+	type: InterviewType
 }
 
 const modes: InterviewMode[] = [
-  { title: '技术面', description: '围绕岗位技能与基础知识进行针对性练习', icon: Microphone, tone: 'blue' },
-  { title: '项目深挖', description: '练习项目背景、难点、取舍和个人贡献', icon: Briefcase, tone: 'violet' },
-  { title: '综合面', description: '兼顾经历表达、岗位动机与协作思考', icon: ChatDotRound, tone: 'green' },
+  { title: '技术面', type: 'technical', description: '围绕岗位技能与基础知识进行针对性练习', icon: Microphone, tone: 'blue' },
+  { title: '项目深挖', type: 'project', description: '练习项目背景、难点、取舍和个人贡献', icon: Briefcase, tone: 'violet' },
+  { title: '综合面', type: 'comprehensive', description: '兼顾经历表达、岗位动机与协作思考', icon: ChatDotRound, tone: 'green' },
 ]
 
 const router = useRouter()
+const route = useRoute()
 
 const options = ref<InterviewOption[]>([])
 const selectedAnalysisId = ref('')
+const selectedType = ref<InterviewType>('technical')
 const loadingOptions = ref(true)
 const starting = ref(false)
 const loadError = ref('')
@@ -48,7 +51,9 @@ async function handleStart() {
   if (!selectedAnalysisId.value || starting.value) return
   starting.value = true
   try {
-    const result = await startInterview(selectedAnalysisId.value)
+    const applicationId = typeof route.query.applicationId === 'string' ? route.query.applicationId : ''
+		const resumeVersionId = typeof route.query.resumeVersionId === 'string' ? route.query.resumeVersionId : ''
+		const result = await startInterview(selectedAnalysisId.value, selectedType.value, applicationId, resumeVersionId)
     ElMessage.success('模拟面试已开始，第一题已保存')
     await router.push({ name: 'interview-session', params: { id: result.sessionId } })
   } catch (error) {
@@ -78,10 +83,10 @@ onMounted(loadOptions)
     </section>
 
     <section class="mode-grid">
-      <article v-for="mode in modes" :key="mode.title" class="panel mode-card" :class="mode.tone">
+      <article v-for="mode in modes" :key="mode.title" class="panel mode-card" :class="[mode.tone, { selected: selectedType === mode.type }]" @click="selectedType = mode.type">
         <span class="mode-icon"><el-icon :size="25"><component :is="mode.icon" /></el-icon></span>
         <div><h3>{{ mode.title }}</h3><p>{{ mode.description }}</p></div>
-        <el-radio :model-value="''" :value="mode.title" disabled>选择</el-radio>
+        <el-radio v-model="selectedType" :value="mode.type">选择</el-radio>
       </article>
     </section>
 
@@ -128,6 +133,8 @@ onMounted(loadOptions)
 .interview-visual b { position: absolute; bottom: 28px; font-size: 20px; letter-spacing: 4px; }
 .mode-grid { display: grid; margin: 18px 0; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; }
 .mode-card { display: grid; min-height: 140px; padding: 20px; align-items: center; grid-template-columns: 50px 1fr auto; gap: 14px; }
+.mode-card { cursor: pointer; }
+.mode-card.selected { border-color: var(--color-primary); box-shadow: 0 8px 24px rgba(65,105,246,.12); }
 .mode-card h3 { margin-bottom: 4px; }
 .mode-card p { margin: 0; color: var(--text-secondary); font-size: 13px; }
 .mode-icon { display: grid; width: 48px; height: 48px; place-items: center; border-radius: 14px; color: var(--color-primary); background: #edf3ff; }

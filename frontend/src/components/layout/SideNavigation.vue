@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   Clock,
+  Briefcase,
   DocumentChecked,
   House,
   Microphone,
@@ -35,6 +36,8 @@ interface NavigationItem {
 const route = useRoute()
 const items: NavigationItem[] = [
   { label: '仪表盘', path: '/app/dashboard', icon: House },
+  { label: '岗位与投递', path: '/app/opportunities', icon: Briefcase },
+  { label: '简历资产', path: '/app/resumes', icon: DocumentChecked },
   { label: 'JD 分析', path: '/app/jd-analysis', icon: DocumentChecked },
   { label: '模拟面试', path: '/app/interviews', icon: Microphone },
   { label: '历史记录', path: '/app/history', icon: Clock },
@@ -45,8 +48,8 @@ const items: NavigationItem[] = [
 const shouldCollapse = computed(() => props.collapsed && !props.drawer)
 
 function isActive(path: string) {
-  return path === '/app/interviews'
-    ? route.path.startsWith('/app/interviews')
+  return path === '/app/interviews' || path === '/app/opportunities'
+    ? route.path.startsWith(path)
     : route.path === path
 }
 </script>
@@ -74,14 +77,9 @@ function isActive(path: string) {
 
     <div class="sidebar-footer">
       <div v-if="!shouldCollapse" class="planning-card">
-        <div class="planning-badge">✦ 产品路线</div>
-        <strong>更多 AI 能力</strong>
-        <span>功能规划中</span>
-      </div>
-      <div v-if="!shouldCollapse" class="progress-card">
-        <div><span>本周求职进度</span><strong>0%</strong></div>
-        <span class="progress-track"><i /></span>
-        <small>新用户暂无任务记录</small>
+        <div class="planning-badge">✦ 求职主线</div>
+        <strong>以岗位为中心</strong>
+        <span>匹配 → 投递 → 面试 → Offer</span>
       </div>
     </div>
   </div>
@@ -205,4 +203,3 @@ function isActive(path: string) {
   color: var(--text-secondary);
 }
 </style>
-

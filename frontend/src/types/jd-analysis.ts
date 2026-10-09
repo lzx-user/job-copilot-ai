@@ -4,6 +4,9 @@ export interface AnalyzeJDRequest {
   jdContent: string
   resumeSummary: string
   skills: string[]
+	jobId?: string
+	jobJdVersionId?: string
+	resumeVersionId?: string
 }
 
 export interface JdAnalysisResult {
