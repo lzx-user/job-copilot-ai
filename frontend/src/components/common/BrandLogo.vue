@@ -11,7 +11,7 @@ withDefaults(defineProps<Props>(), {
 <template>
   <div class="brand" :class="{ 'is-compact': compact }" aria-label="求职陪跑 AI 助手">
     <span class="brand-mark" aria-hidden="true">✦</span>
-    <span v-if="!compact" class="brand-name">求职陪跑 <strong>AI</strong> 助手</span>
+    <span class="brand-name" :aria-hidden="compact">求职陪跑 <strong>AI</strong> 助手</span>
   </div>
 </template>
 
@@ -42,7 +42,10 @@ withDefaults(defineProps<Props>(), {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.02em;
+  opacity: 1;
+  transform: translateX(0);
   white-space: nowrap;
+  transition: opacity 0.12s ease 0.14s, transform 0.16s ease 0.12s;
 }
 
 .brand-name strong {
@@ -52,5 +55,11 @@ withDefaults(defineProps<Props>(), {
 .is-compact {
   justify-content: center;
 }
-</style>
 
+.is-compact .brand-name {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 0.06s ease, transform 0.06s ease, visibility 0s linear 0.06s;
+}
+</style>

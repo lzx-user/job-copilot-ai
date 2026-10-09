@@ -6,10 +6,11 @@ import {
   House,
   Microphone,
   Setting,
+  Tickets,
   User,
 } from '@element-plus/icons-vue'
 import type { Component } from 'vue'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import BrandLogo from '../common/BrandLogo.vue'
 
@@ -34,10 +35,12 @@ interface NavigationItem {
 }
 
 const route = useRoute()
+const hovered = ref(false)
+const focusWithin = ref(false)
 const items: NavigationItem[] = [
   { label: '仪表盘', path: '/app/dashboard', icon: House },
   { label: '岗位与投递', path: '/app/opportunities', icon: Briefcase },
-  { label: '简历资产', path: '/app/resumes', icon: DocumentChecked },
+  { label: '简历资产', path: '/app/resumes', icon: Tickets },
   { label: 'JD 分析', path: '/app/jd-analysis', icon: DocumentChecked },
   { label: '模拟面试', path: '/app/interviews', icon: Microphone },
   { label: '历史记录', path: '/app/history', icon: Clock },
@@ -46,6 +49,13 @@ const items: NavigationItem[] = [
 ]
 
 const shouldCollapse = computed(() => props.collapsed && !props.drawer)
+const previewExpanded = computed(() => shouldCollapse.value && (hovered.value || focusWithin.value))
+const isVisuallyCollapsed = computed(() => shouldCollapse.value && !previewExpanded.value)
+
+function handleFocusOut(event: FocusEvent) {
+  const navigation = event.currentTarget as HTMLElement
+  focusWithin.value = navigation.contains(event.relatedTarget as Node | null)
+}
 
 function isActive(path: string) {
   return path === '/app/interviews' || path === '/app/opportunities'
@@ -55,9 +65,19 @@ function isActive(path: string) {
 </script>
 
 <template>
-  <div class="side-navigation" :class="{ collapsed: shouldCollapse }">
+  <div
+    class="side-navigation"
+    :class="{
+      collapsed: isVisuallyCollapsed,
+      'preview-expanded': previewExpanded,
+    }"
+    @mouseenter="hovered = true"
+    @mouseleave="hovered = false"
+    @focusin="focusWithin = true"
+    @focusout="handleFocusOut"
+  >
     <div class="logo-area">
-      <BrandLogo :compact="shouldCollapse" />
+      <BrandLogo :compact="isVisuallyCollapsed" />
     </div>
 
     <nav class="nav-list" aria-label="主要导航">
@@ -67,16 +87,16 @@ function isActive(path: string) {
         :to="item.path"
         class="nav-item"
         :class="{ active: isActive(item.path) }"
-        :title="shouldCollapse ? item.label : undefined"
+        :title="isVisuallyCollapsed ? item.label : undefined"
         @click="emit('navigate')"
       >
         <el-icon :size="20"><component :is="item.icon" /></el-icon>
-        <span v-if="!shouldCollapse">{{ item.label }}</span>
+        <span :aria-hidden="isVisuallyCollapsed">{{ item.label }}</span>
       </RouterLink>
     </nav>
 
     <div class="sidebar-footer">
-      <div v-if="!shouldCollapse" class="planning-card">
+      <div class="planning-card" :aria-hidden="isVisuallyCollapsed">
         <div class="planning-badge">✦ 求职主线</div>
         <strong>以岗位为中心</strong>
         <span>匹配 → 投递 → 面试 → Offer</span>
@@ -93,14 +113,19 @@ function isActive(path: string) {
   min-height: 100vh;
   padding: 0 16px 18px;
   flex-direction: column;
+  overflow: hidden;
   border-right: 1px solid var(--border-color);
   background: rgba(255, 255, 255, 0.96);
-  transition: width 0.25s ease;
+  transition: width 0.25s ease, box-shadow 0.2s ease;
 }
 
 .side-navigation.collapsed {
   width: 84px;
   padding-inline: 12px;
+}
+
+.side-navigation.preview-expanded {
+  box-shadow: 16px 0 32px rgba(45, 72, 130, 0.14);
 }
 
 .logo-area {
@@ -117,6 +142,7 @@ function isActive(path: string) {
 }
 
 .nav-item {
+  position: relative;
   display: flex;
   height: 50px;
   padding: 0 15px;
@@ -125,7 +151,17 @@ function isActive(path: string) {
   border-radius: 13px;
   color: var(--text-regular);
   font-weight: 600;
-  transition: 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.nav-item > span {
+  position: absolute;
+  left: 49px;
+  width: calc(var(--sidebar-width) - 80px);
+  opacity: 1;
+  transform: translateX(0);
+  white-space: nowrap;
+  transition: opacity 0.12s ease 0.14s, transform 0.16s ease 0.12s;
 }
 
 .nav-item:hover {
@@ -143,6 +179,13 @@ function isActive(path: string) {
   padding: 0;
 }
 
+.collapsed .nav-item > span {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 0.06s ease, transform 0.06s ease, visibility 0s linear 0.06s;
+}
+
 .sidebar-footer {
   display: grid;
   margin-top: auto;
@@ -158,9 +201,21 @@ function isActive(path: string) {
 
 .planning-card {
   display: grid;
+  width: calc(var(--sidebar-width) - 32px);
+  min-height: 140px;
   padding: 16px;
   gap: 4px;
   background: linear-gradient(145deg, #eaf3ff, #e7d9ff);
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 0.14s ease 0.12s, transform 0.18s ease 0.1s;
+}
+
+.collapsed .planning-card {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: opacity 0.08s ease, transform 0.08s ease, visibility 0s linear 0.08s;
 }
 
 .planning-badge {

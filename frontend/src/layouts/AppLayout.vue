@@ -50,7 +50,11 @@ onBeforeUnmount(() => window.removeEventListener('resize', syncResponsiveLayout)
 
 <template>
   <div class="app-layout">
-    <aside v-if="!isMobile" class="desktop-sidebar">
+    <aside
+      v-if="!isMobile"
+      class="desktop-sidebar"
+      :class="{ 'is-collapsed': uiStore.sidebarCollapsed }"
+    >
       <SideNavigation :collapsed="uiStore.sidebarCollapsed" />
     </aside>
 
@@ -114,6 +118,10 @@ onBeforeUnmount(() => window.removeEventListener('resize', syncResponsiveLayout)
   top: 0;
   flex: 0 0 auto;
   height: 100vh;
+}
+
+.desktop-sidebar.is-collapsed {
+  width: 84px;
 }
 
 .app-main {
@@ -248,4 +256,3 @@ kbd {
   }
 }
 </style>
-
