@@ -20,7 +20,10 @@ type StartInterviewService struct {
 }
 
 type StartInterviewCommand struct {
-	AnalysisID string
+	AnalysisID      string
+	ApplicationID   string
+	ResumeVersionID string
+	InterviewType   string
 }
 
 type StartInterviewOutput struct {
@@ -48,7 +51,9 @@ func (service *StartInterviewService) Execute(
 ) (StartInterviewOutput, error) {
 	userID = strings.TrimSpace(userID)
 	analysisID := strings.TrimSpace(command.AnalysisID)
-	if userID == "" || !isUUID(analysisID) {
+	applicationID := strings.TrimSpace(command.ApplicationID)
+	resumeVersionID := strings.TrimSpace(command.ResumeVersionID)
+	if userID == "" || !isUUID(analysisID) || !isOptionalUUID(applicationID) || !isOptionalUUID(resumeVersionID) {
 		return StartInterviewOutput{}, ErrInvalidStartInterviewCommand
 	}
 
@@ -61,22 +66,33 @@ func (service *StartInterviewService) Execute(
 	if err != nil {
 		return StartInterviewOutput{}, err
 	}
+	pendingSession, err = pendingSession.WithReferences(command.ApplicationID, command.ResumeVersionID, command.InterviewType)
+	if err != nil {
+		return StartInterviewOutput{}, ErrInvalidStartInterviewCommand
+	}
+	interviewContext, err = interviewContext.WithInterviewType(pendingSession.InterviewType())
+	if err != nil {
+		return StartInterviewOutput{}, ErrInvalidStartInterviewCommand
+	}
 	// 先生成并校验第一题，避免上游失败时留下无法使用的 pending 会话。
 	questionContent, err := service.aiClient.GenerateFirstInterviewQuestion(ctx, interviewContext)
 	if err != nil {
 		return StartInterviewOutput{}, err
 	}
-	sessionID, err := service.repository.CreatePendingSession(ctx, userID, analysisID)
+	sessionID, err := service.repository.CreatePendingSession(ctx, pendingSession)
 	if err != nil {
 		return StartInterviewOutput{}, err
 	}
 	pendingSession, err = interviewdomain.RestoreInterviewSession(interviewdomain.InterviewSessionParams{
-		ID:           sessionID,
-		UserID:       pendingSession.UserID(),
-		AnalysisID:   pendingSession.AnalysisID(),
-		Status:       pendingSession.Status(),
-		CurrentRound: pendingSession.CurrentRound(),
-		MaxRounds:    pendingSession.MaxRounds(),
+		ID:              sessionID,
+		UserID:          pendingSession.UserID(),
+		AnalysisID:      pendingSession.AnalysisID(),
+		Status:          pendingSession.Status(),
+		CurrentRound:    pendingSession.CurrentRound(),
+		MaxRounds:       pendingSession.MaxRounds(),
+		ApplicationID:   pendingSession.ApplicationID(),
+		ResumeVersionID: pendingSession.ResumeVersionID(),
+		InterviewType:   pendingSession.InterviewType(),
 	})
 	if err != nil {
 		return StartInterviewOutput{}, err
@@ -107,6 +123,8 @@ func (service *StartInterviewService) Execute(
 		Question:     question.Content(),
 	}, nil
 }
+
+func isOptionalUUID(value string) bool { return value == "" || isUUID(value) }
 
 func isUUID(value string) bool {
 	if len(value) != 36 {

@@ -91,6 +91,10 @@ func (repository *SupabaseAnalysisRepository) Save(
 		ResumeSuggestions []string `json:"resume_suggestions"`
 		PreparationTopics []string `json:"preparation_topics"`
 		GreetingMessage   string   `json:"greeting_message"`
+		JobID             *string  `json:"job_id"`
+		JobJDVersionID    *string  `json:"job_jd_version_id"`
+		ResumeVersionID   *string  `json:"resume_version_id"`
+		PromptVersion     string   `json:"prompt_version"`
 	}{
 		UserID:            userID,
 		CompanyName:       request.CompanyName(),
@@ -106,6 +110,10 @@ func (repository *SupabaseAnalysisRepository) Save(
 		ResumeSuggestions: result.ResumeSuggestions(),
 		PreparationTopics: result.PreparationTopics(),
 		GreetingMessage:   result.GreetingMessage(),
+		JobID:             optionalString(request.JobID()),
+		JobJDVersionID:    optionalString(request.JobJDVersionID()),
+		ResumeVersionID:   optionalString(request.ResumeVersionID()),
+		PromptVersion:     "v1",
 	})
 	if err != nil {
 		return "", errors.Join(port.ErrRepositoryOperation, err)
@@ -142,6 +150,13 @@ func (repository *SupabaseAnalysisRepository) Save(
 	}
 
 	return rows[0].ID, nil
+}
+
+func optionalString(value string) *string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return &value
 }
 
 func (repository *SupabaseAnalysisRepository) List(

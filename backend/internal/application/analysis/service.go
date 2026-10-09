@@ -25,11 +25,14 @@ type AnalyzeJDOutput struct {
 }
 
 type AnalyzeJDCommand struct {
-	CompanyName   string
-	JobTitle      string
-	JDContent     string
-	ResumeSummary string
-	Skills        []string
+	CompanyName     string
+	JobTitle        string
+	JDContent       string
+	ResumeSummary   string
+	Skills          []string
+	JobID           string
+	JobJDVersionID  string
+	ResumeVersionID string
 }
 
 func NewAnalyzeJDService(
@@ -61,6 +64,10 @@ func (service *AnalyzeJDService) Execute(
 		command.ResumeSummary,
 		command.Skills,
 	)
+	if err != nil {
+		return AnalyzeJDOutput{}, err
+	}
+	request, err = request.WithReferences(command.JobID, command.JobJDVersionID, command.ResumeVersionID)
 	if err != nil {
 		return AnalyzeJDOutput{}, err
 	}

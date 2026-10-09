@@ -62,11 +62,17 @@ func (repository *SupabaseDashboardRepository) GetSummary(
 		return dashboarddomain.Summary{}, repositoryHTTPError(httpResponse.StatusCode)
 	}
 	var payload struct {
-		JDCount             int `json:"jdCount"`
-		InterviewCount      int `json:"interviewCount"`
-		WeeklyRecordCount   int `json:"weeklyRecordCount"`
-		ProfileCompleteness int `json:"profileCompleteness"`
-		RecentRecords       []struct {
+		JDCount                    int `json:"jdCount"`
+		InterviewCount             int `json:"interviewCount"`
+		ApplicationCount           int `json:"applicationCount"`
+		ActiveApplicationCount     int `json:"activeApplicationCount"`
+		RealInterviewCount         int `json:"realInterviewCount"`
+		OfferCount                 int `json:"offerCount"`
+		ApplicationToInterviewRate int `json:"applicationToInterviewRate"`
+		InterviewToOfferRate       int `json:"interviewToOfferRate"`
+		WeeklyRecordCount          int `json:"weeklyRecordCount"`
+		ProfileCompleteness        int `json:"profileCompleteness"`
+		RecentRecords              []struct {
 			ID          string    `json:"id"`
 			Kind        string    `json:"kind"`
 			CompanyName string    `json:"companyName"`
@@ -87,7 +93,11 @@ func (repository *SupabaseDashboardRepository) GetSummary(
 	}
 	return dashboarddomain.Validate(dashboarddomain.Summary{
 		JDCount: payload.JDCount, InterviewCount: payload.InterviewCount,
-		WeeklyRecordCount: payload.WeeklyRecordCount, ProfileCompleteness: payload.ProfileCompleteness,
+		ApplicationCount: payload.ApplicationCount, ActiveApplicationCount: payload.ActiveApplicationCount,
+		RealInterviewCount: payload.RealInterviewCount, OfferCount: payload.OfferCount,
+		ApplicationToInterviewRate: payload.ApplicationToInterviewRate,
+		InterviewToOfferRate:       payload.InterviewToOfferRate,
+		WeeklyRecordCount:          payload.WeeklyRecordCount, ProfileCompleteness: payload.ProfileCompleteness,
 		RecentRecords: recentRecords,
 	})
 }

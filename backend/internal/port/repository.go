@@ -5,9 +5,24 @@ import (
 	"errors"
 
 	analysisdomain "job-copilot-backend/internal/domain/analysis"
+	careerdomain "job-copilot-backend/internal/domain/career"
 	dashboarddomain "job-copilot-backend/internal/domain/dashboard"
 	interviewdomain "job-copilot-backend/internal/domain/interview"
 )
+
+type CareerRepository interface {
+	GetWorkspace(ctx context.Context, userID string) (careerdomain.Workspace, error)
+	CreateResume(ctx context.Context, userID string, input careerdomain.CreateResumeInput) (resumeID, versionID string, err error)
+	CreateResumeVersion(ctx context.Context, userID string, input careerdomain.CreateResumeVersionInput) (string, error)
+	CreateJob(ctx context.Context, userID string, input careerdomain.CreateJobInput) (jobID, jdVersionID string, err error)
+	CreateJDVersion(ctx context.Context, userID string, input careerdomain.CreateJDVersionInput) (string, error)
+	CreateApplication(ctx context.Context, userID string, input careerdomain.CreateApplicationInput) (string, error)
+	AddApplicationEvent(ctx context.Context, userID string, input careerdomain.CreateEventInput) (string, error)
+	CreateRealInterview(ctx context.Context, userID string, input careerdomain.CreateInterviewInput) (string, error)
+	UpdateRealInterview(ctx context.Context, userID string, input careerdomain.UpdateInterviewInput) error
+	SaveRetrospective(ctx context.Context, userID string, input careerdomain.SaveRetrospectiveInput) error
+	SaveOffer(ctx context.Context, userID string, input careerdomain.SaveOfferInput) error
+}
 
 type DashboardRepository interface {
 	GetSummary(ctx context.Context, userID string) (dashboarddomain.Summary, error)
@@ -18,6 +33,7 @@ var (
 	ErrRepositoryOperation   = errors.New("repository operation failed")
 	ErrRepositoryNotFound    = errors.New("repository record not found")
 	ErrRepositoryConflict    = errors.New("repository conflict")
+	ErrRepositorySchema      = errors.New("repository schema is not initialized")
 )
 
 // AnalysisRepository 描述核心业务需要的分析结果持久化能力。
@@ -38,7 +54,7 @@ type AnalysisRepository interface {
 type InterviewRepository interface {
 	ListOptions(ctx context.Context, userID string) ([]interviewdomain.InterviewOption, error)
 	FindContext(ctx context.Context, userID string, analysisID string) (interviewdomain.InterviewContext, error)
-	CreatePendingSession(ctx context.Context, userID string, analysisID string) (sessionID string, err error)
+	CreatePendingSession(ctx context.Context, session interviewdomain.InterviewSession) (sessionID string, err error)
 	StartSession(
 		ctx context.Context,
 		session interviewdomain.InterviewSession,

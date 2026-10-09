@@ -45,8 +45,14 @@ func (handler *DashboardHandler) Get(ctx *gin.Context) {
 	}
 	response.Success(ctx, gin.H{
 		"jdCount": summary.JDCount, "interviewCount": summary.InterviewCount,
-		"weeklyRecordCount":   summary.WeeklyRecordCount,
-		"profileCompleteness": summary.ProfileCompleteness,
-		"recentRecords":       recentRecords,
+		"applicationCount":           summary.ApplicationCount,
+		"activeApplicationCount":     summary.ActiveApplicationCount,
+		"realInterviewCount":         summary.RealInterviewCount,
+		"offerCount":                 summary.OfferCount,
+		"applicationToInterviewRate": summary.ApplicationToInterviewRate,
+		"interviewToOfferRate":       summary.InterviewToOfferRate,
+		"weeklyRecordCount":          summary.WeeklyRecordCount,
+		"profileCompleteness":        summary.ProfileCompleteness,
+		"recentRecords":              recentRecords,
 	})
 }

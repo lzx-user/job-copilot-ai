@@ -22,11 +22,14 @@ type AnalyzeJDHandler struct {
 }
 
 type analyzeJDRequest struct {
-	CompanyName   string   `json:"companyName"`
-	JobTitle      string   `json:"jobTitle"`
-	JDContent     string   `json:"jdContent"`
-	ResumeSummary string   `json:"resumeSummary"`
-	Skills        []string `json:"skills"`
+	CompanyName     string   `json:"companyName"`
+	JobTitle        string   `json:"jobTitle"`
+	JDContent       string   `json:"jdContent"`
+	ResumeSummary   string   `json:"resumeSummary"`
+	Skills          []string `json:"skills"`
+	JobID           string   `json:"jobId"`
+	JobJDVersionID  string   `json:"jobJdVersionId"`
+	ResumeVersionID string   `json:"resumeVersionId"`
 }
 
 func NewAnalyzeJDHandler(service *analysisapp.AnalyzeJDService) *AnalyzeJDHandler {
@@ -49,11 +52,14 @@ func (handler *AnalyzeJDHandler) Handle(ctx *gin.Context) {
 	}
 
 	output, err := handler.service.Execute(ctx.Request.Context(), userID, analysisapp.AnalyzeJDCommand{
-		CompanyName:   request.CompanyName,
-		JobTitle:      request.JobTitle,
-		JDContent:     request.JDContent,
-		ResumeSummary: request.ResumeSummary,
-		Skills:        request.Skills,
+		CompanyName:     request.CompanyName,
+		JobTitle:        request.JobTitle,
+		JDContent:       request.JDContent,
+		ResumeSummary:   request.ResumeSummary,
+		Skills:          request.Skills,
+		JobID:           request.JobID,
+		JobJDVersionID:  request.JobJDVersionID,
+		ResumeVersionID: request.ResumeVersionID,
 	})
 	if err != nil {
 		handleAnalyzeJDError(ctx, err)

@@ -32,8 +32,7 @@ func (repository *PlaceholderInterviewRepository) FindContext(
 
 func (repository *PlaceholderInterviewRepository) CreatePendingSession(
 	context.Context,
-	string,
-	string,
+	interviewdomain.InterviewSession,
 ) (string, error) {
 	return "", port.ErrRepositoryUnavailable
 }

@@ -172,8 +172,7 @@ func (repository *SupabaseInterviewRepository) FindContext(
 
 func (repository *SupabaseInterviewRepository) CreatePendingSession(
 	ctx context.Context,
-	userID string,
-	analysisID string,
+	session interviewdomain.InterviewSession,
 ) (string, error) {
 	accessToken, ok := port.AuthenticatedAccessToken(ctx)
 	if !ok {
@@ -181,16 +180,22 @@ func (repository *SupabaseInterviewRepository) CreatePendingSession(
 	}
 
 	body, err := json.Marshal(struct {
-		UserID     string `json:"user_id"`
-		AnalysisID string `json:"jd_analysis_id"`
-	}{UserID: userID, AnalysisID: analysisID})
+		AnalysisID      string  `json:"p_analysis_id"`
+		ApplicationID   *string `json:"p_application_id"`
+		ResumeVersionID *string `json:"p_resume_version_id"`
+		InterviewType   string  `json:"p_interview_type"`
+	}{
+		AnalysisID:      session.AnalysisID(),
+		ApplicationID:   optionalString(session.ApplicationID()),
+		ResumeVersionID: optionalString(session.ResumeVersionID()), InterviewType: session.InterviewType(),
+	})
 	if err != nil {
 		return "", errors.Join(port.ErrRepositoryOperation, err)
 	}
 	httpRequest, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		repository.baseURL+"/interview_sessions?select=id",
+		repository.baseURL+"/rpc/create_interview_session_with_context",
 		bytes.NewReader(body),
 	)
 	if err != nil {
@@ -208,14 +213,11 @@ func (repository *SupabaseInterviewRepository) CreatePendingSession(
 		return "", repositoryHTTPError(httpResponse.StatusCode)
 	}
 
-	var rows []struct {
-		ID string `json:"id"`
-	}
-	if err := json.NewDecoder(httpResponse.Body).Decode(&rows); err != nil ||
-		len(rows) != 1 || strings.TrimSpace(rows[0].ID) == "" {
+	var sessionID string
+	if err := json.NewDecoder(httpResponse.Body).Decode(&sessionID); err != nil || strings.TrimSpace(sessionID) == "" {
 		return "", port.ErrRepositoryOperation
 	}
-	return rows[0].ID, nil
+	return sessionID, nil
 }
 
 func (repository *SupabaseInterviewRepository) StartSession(
@@ -276,6 +278,10 @@ func (repository *SupabaseInterviewRepository) FindTurnContext(
 	if err != nil {
 		return interviewdomain.InterviewTurnContext{}, err
 	}
+	interviewContext, err = interviewContext.WithInterviewType(session.InterviewType())
+	if err != nil {
+		return interviewdomain.InterviewTurnContext{}, errors.Join(port.ErrRepositoryOperation, err)
+	}
 	messages, err := repository.findMessages(ctx, userID, sessionID, 8)
 	if err != nil {
 		return interviewdomain.InterviewTurnContext{}, err
@@ -295,6 +301,10 @@ func (repository *SupabaseInterviewRepository) FindReportContext(
 	interviewContext, err := repository.FindContext(ctx, userID, session.AnalysisID())
 	if err != nil {
 		return interviewdomain.InterviewReportContext{}, err
+	}
+	interviewContext, err = interviewContext.WithInterviewType(session.InterviewType())
+	if err != nil {
+		return interviewdomain.InterviewReportContext{}, errors.Join(port.ErrRepositoryOperation, err)
 	}
 	messages, err := repository.findMessages(ctx, userID, sessionID, 10)
 	if err != nil {
@@ -321,6 +331,10 @@ func (repository *SupabaseInterviewRepository) FindSessionDetail(
 	interviewContext, err := repository.FindContext(ctx, userID, session.AnalysisID())
 	if err != nil {
 		return interviewdomain.SessionDetail{}, err
+	}
+	interviewContext, err = interviewContext.WithInterviewType(session.InterviewType())
+	if err != nil {
+		return interviewdomain.SessionDetail{}, errors.Join(port.ErrRepositoryOperation, err)
 	}
 	messages, err := repository.findMessages(ctx, userID, sessionID, 20)
 	if err != nil {
@@ -581,7 +595,7 @@ func (repository *SupabaseInterviewRepository) findSession(
 	query := url.Values{}
 	query.Set("id", "eq."+sessionID)
 	query.Set("user_id", "eq."+userID)
-	query.Set("select", "id,user_id,jd_analysis_id,status,current_round,max_rounds")
+	query.Set("select", "id,user_id,jd_analysis_id,status,current_round,max_rounds,application_id,resume_version_id,interview_type")
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, repository.baseURL+"/interview_sessions?"+query.Encode(), nil)
 	if err != nil {
 		return interviewdomain.InterviewSession{}, errors.Join(port.ErrRepositoryOperation, err)
@@ -597,12 +611,15 @@ func (repository *SupabaseInterviewRepository) findSession(
 	}
 	// PostgREST 的 snake_case 字段需要显式标签。
 	var rawRows []struct {
-		ID           string                          `json:"id"`
-		UserID       string                          `json:"user_id"`
-		AnalysisID   string                          `json:"jd_analysis_id"`
-		Status       interviewdomain.InterviewStatus `json:"status"`
-		CurrentRound int                             `json:"current_round"`
-		MaxRounds    int                             `json:"max_rounds"`
+		ID              string                          `json:"id"`
+		UserID          string                          `json:"user_id"`
+		AnalysisID      string                          `json:"jd_analysis_id"`
+		Status          interviewdomain.InterviewStatus `json:"status"`
+		CurrentRound    int                             `json:"current_round"`
+		MaxRounds       int                             `json:"max_rounds"`
+		ApplicationID   *string                         `json:"application_id"`
+		ResumeVersionID *string                         `json:"resume_version_id"`
+		InterviewType   string                          `json:"interview_type"`
 	}
 	if err := json.NewDecoder(httpResponse.Body).Decode(&rawRows); err != nil {
 		return interviewdomain.InterviewSession{}, errors.Join(port.ErrRepositoryOperation, err)
@@ -617,7 +634,16 @@ func (repository *SupabaseInterviewRepository) findSession(
 	return interviewdomain.RestoreInterviewSession(interviewdomain.InterviewSessionParams{
 		ID: row.ID, UserID: row.UserID, AnalysisID: row.AnalysisID, Status: row.Status,
 		CurrentRound: row.CurrentRound, MaxRounds: row.MaxRounds,
+		ApplicationID: stringValue(row.ApplicationID), ResumeVersionID: stringValue(row.ResumeVersionID),
+		InterviewType: row.InterviewType,
 	})
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func (repository *SupabaseInterviewRepository) findMessages(

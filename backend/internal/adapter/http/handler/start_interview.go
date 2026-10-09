@@ -22,7 +22,10 @@ type StartInterviewHandler struct {
 }
 
 type startInterviewRequest struct {
-	AnalysisID string `json:"analysisId"`
+	AnalysisID      string `json:"analysisId"`
+	ApplicationID   string `json:"applicationId"`
+	ResumeVersionID string `json:"resumeVersionId"`
+	InterviewType   string `json:"interviewType"`
 }
 
 func NewStartInterviewHandler(service *interviewapp.StartInterviewService) *StartInterviewHandler {
@@ -44,7 +47,10 @@ func (handler *StartInterviewHandler) Handle(ctx *gin.Context) {
 	}
 
 	output, err := handler.service.Execute(ctx.Request.Context(), userID, interviewapp.StartInterviewCommand{
-		AnalysisID: request.AnalysisID,
+		AnalysisID:      request.AnalysisID,
+		ApplicationID:   request.ApplicationID,
+		ResumeVersionID: request.ResumeVersionID,
+		InterviewType:   request.InterviewType,
 	})
 	if err != nil {
 		handleStartInterviewError(ctx, err)

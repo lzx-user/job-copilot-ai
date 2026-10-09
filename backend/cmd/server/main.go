@@ -12,6 +12,7 @@ import (
 	httpadapter "job-copilot-backend/internal/adapter/http"
 	"job-copilot-backend/internal/adapter/repository"
 	analysisapp "job-copilot-backend/internal/application/analysis"
+	careerapp "job-copilot-backend/internal/application/career"
 	dashboardapp "job-copilot-backend/internal/application/dashboard"
 	interviewapp "job-copilot-backend/internal/application/interview"
 	"job-copilot-backend/internal/config"
@@ -34,7 +35,7 @@ func main() {
 	}
 
 	var aiClient port.AIClient = ai.NewPlaceholderAdapter()
-	if configuredAI, err := ai.NewOpenAICompatibleAdapter(
+	if configuredAI, err := ai.NewCompatibleLLMAdapter(
 		appConfig.AIBaseURL,
 		appConfig.AIAPIKey,
 		appConfig.AIModel,
@@ -66,6 +67,14 @@ func main() {
 		nil,
 	); err == nil {
 		dashboardRepository = configuredRepository
+	}
+	var careerRepository port.CareerRepository = &repository.PlaceholderCareerRepository{}
+	if configuredRepository, err := repository.NewSupabaseCareerRepository(
+		appConfig.SupabaseURL,
+		appConfig.SupabaseAnonKey,
+		nil,
+	); err == nil {
+		careerRepository = configuredRepository
 	}
 
 	analyzeJDService, err := analysisapp.NewAnalyzeJDService(aiClient, analysisRepository)
@@ -104,6 +113,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化仪表盘服务失败：%v", err)
 	}
+	careerService, err := careerapp.NewService(careerRepository)
+	if err != nil {
+		log.Fatalf("初始化求职工作台服务失败：%v", err)
+	}
 	engine := httpadapter.NewRouter(appConfig.FrontendOrigin, httpadapter.Dependencies{
 		AuthProvider:                authProvider,
 		AnalyzeJDService:            analyzeJDService,
@@ -116,6 +129,7 @@ func main() {
 		InterviewHistoryService:     interviewHistoryService,
 		AIRateLimit:                 appConfig.AIRateLimit,
 		DashboardService:            dashboardService,
+		CareerService:               careerService,
 	})
 	if err := engine.SetTrustedProxies(nil); err != nil {
 		log.Fatalf("配置可信代理失败：%v", err)

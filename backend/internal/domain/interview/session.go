@@ -16,30 +16,37 @@ var (
 
 // InterviewSession 维护五轮面试的状态与轮次约束，不依赖 HTTP 或数据库实现。
 type InterviewSession struct {
-	id           string
-	userID       string
-	analysisID   string
-	status       InterviewStatus
-	currentRound int
-	maxRounds    int
+	id              string
+	userID          string
+	analysisID      string
+	status          InterviewStatus
+	currentRound    int
+	maxRounds       int
+	applicationID   string
+	resumeVersionID string
+	interviewType   string
 }
 
 type InterviewSessionParams struct {
-	ID           string
-	UserID       string
-	AnalysisID   string
-	Status       InterviewStatus
-	CurrentRound int
-	MaxRounds    int
+	ID              string
+	UserID          string
+	AnalysisID      string
+	Status          InterviewStatus
+	CurrentRound    int
+	MaxRounds       int
+	ApplicationID   string
+	ResumeVersionID string
+	InterviewType   string
 }
 
 func NewInterviewSession(userID string, analysisID string) (InterviewSession, error) {
 	return restoreInterviewSession(InterviewSessionParams{
-		UserID:       userID,
-		AnalysisID:   analysisID,
-		Status:       InterviewStatusPending,
-		CurrentRound: 0,
-		MaxRounds:    MaxRounds,
+		UserID:        userID,
+		AnalysisID:    analysisID,
+		Status:        InterviewStatusPending,
+		CurrentRound:  0,
+		MaxRounds:     MaxRounds,
+		InterviewType: "technical",
 	})
 }
 
@@ -55,19 +62,48 @@ func restoreInterviewSession(params InterviewSessionParams) (InterviewSession, e
 	params.ID = strings.TrimSpace(params.ID)
 	params.UserID = strings.TrimSpace(params.UserID)
 	params.AnalysisID = strings.TrimSpace(params.AnalysisID)
+	params.ApplicationID = strings.TrimSpace(params.ApplicationID)
+	params.ResumeVersionID = strings.TrimSpace(params.ResumeVersionID)
+	params.InterviewType = strings.TrimSpace(params.InterviewType)
+	if params.InterviewType == "" {
+		params.InterviewType = "technical"
+	}
 	if params.UserID == "" || params.AnalysisID == "" || params.MaxRounds != MaxRounds ||
-		!isValidSessionState(params.Status, params.CurrentRound) {
+		!isValidSessionState(params.Status, params.CurrentRound) || !isValidInterviewType(params.InterviewType) {
 		return InterviewSession{}, ErrInvalidInterviewSession
 	}
 
 	return InterviewSession{
-		id:           params.ID,
-		userID:       params.UserID,
-		analysisID:   params.AnalysisID,
-		status:       params.Status,
-		currentRound: params.CurrentRound,
-		maxRounds:    params.MaxRounds,
+		id:              params.ID,
+		userID:          params.UserID,
+		analysisID:      params.AnalysisID,
+		status:          params.Status,
+		currentRound:    params.CurrentRound,
+		maxRounds:       params.MaxRounds,
+		applicationID:   params.ApplicationID,
+		resumeVersionID: params.ResumeVersionID,
+		interviewType:   params.InterviewType,
 	}, nil
+}
+
+func isValidInterviewType(value string) bool {
+	return value == "technical" || value == "project" || value == "comprehensive"
+}
+
+func (session InterviewSession) WithReferences(applicationID, resumeVersionID, interviewType string) (InterviewSession, error) {
+	applicationID = strings.TrimSpace(applicationID)
+	resumeVersionID = strings.TrimSpace(resumeVersionID)
+	interviewType = strings.TrimSpace(interviewType)
+	if interviewType == "" {
+		interviewType = "technical"
+	}
+	if !isValidInterviewType(interviewType) {
+		return InterviewSession{}, ErrInvalidInterviewSession
+	}
+	session.applicationID = applicationID
+	session.resumeVersionID = resumeVersionID
+	session.interviewType = interviewType
+	return session, nil
 }
 
 func isValidSessionState(status InterviewStatus, currentRound int) bool {
@@ -126,3 +162,6 @@ func (session InterviewSession) AnalysisID() string      { return session.analys
 func (session InterviewSession) Status() InterviewStatus { return session.status }
 func (session InterviewSession) CurrentRound() int       { return session.currentRound }
 func (session InterviewSession) MaxRounds() int          { return session.maxRounds }
+func (session InterviewSession) ApplicationID() string   { return session.applicationID }
+func (session InterviewSession) ResumeVersionID() string { return session.resumeVersionID }
+func (session InterviewSession) InterviewType() string   { return session.interviewType }

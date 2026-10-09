@@ -16,21 +16,23 @@ import (
 	"job-copilot-backend/internal/port"
 )
 
-type OpenAICompatibleAdapter struct {
+// CompatibleLLMAdapter 调用支持 OpenAI Chat Completions 协议的模型平台。
+// 当前由环境变量指向国内百炼服务，不依赖 OpenAI 官方服务或订阅。
+type CompatibleLLMAdapter struct {
 	endpoint   string
 	apiKey     string
 	model      string
 	httpClient *http.Client
 }
 
-var _ port.AIClient = (*OpenAICompatibleAdapter)(nil)
+var _ port.AIClient = (*CompatibleLLMAdapter)(nil)
 
-func NewOpenAICompatibleAdapter(
+func NewCompatibleLLMAdapter(
 	baseURL string,
 	apiKey string,
 	model string,
 	httpClient *http.Client,
-) (*OpenAICompatibleAdapter, error) {
+) (*CompatibleLLMAdapter, error) {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	apiKey = strings.TrimSpace(apiKey)
 	model = strings.TrimSpace(model)
@@ -41,7 +43,7 @@ func NewOpenAICompatibleAdapter(
 		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
 
-	return &OpenAICompatibleAdapter{
+	return &CompatibleLLMAdapter{
 		endpoint:   baseURL + "/chat/completions",
 		apiKey:     apiKey,
 		model:      model,
@@ -71,7 +73,7 @@ type chatCompletionResponse struct {
 	} `json:"choices"`
 }
 
-func (adapter *OpenAICompatibleAdapter) AnalyzeJD(
+func (adapter *CompatibleLLMAdapter) AnalyzeJD(
 	ctx context.Context,
 	request analysisdomain.AnalysisRequest,
 ) (analysisdomain.AnalysisResult, error) {
@@ -91,7 +93,7 @@ func (adapter *OpenAICompatibleAdapter) AnalyzeJD(
 	return decodeAnalysisResult(content)
 }
 
-func (adapter *OpenAICompatibleAdapter) GenerateFirstInterviewQuestion(
+func (adapter *CompatibleLLMAdapter) GenerateFirstInterviewQuestion(
 	ctx context.Context,
 	input interviewdomain.InterviewContext,
 ) (string, error) {
@@ -111,7 +113,7 @@ func (adapter *OpenAICompatibleAdapter) GenerateFirstInterviewQuestion(
 	return decodeInterviewQuestion(content)
 }
 
-func (adapter *OpenAICompatibleAdapter) EvaluateInterviewAnswer(
+func (adapter *CompatibleLLMAdapter) EvaluateInterviewAnswer(
 	ctx context.Context,
 	input interviewdomain.InterviewTurnPrompt,
 ) (interviewdomain.InterviewTurnResult, error) {
@@ -129,7 +131,7 @@ func (adapter *OpenAICompatibleAdapter) EvaluateInterviewAnswer(
 	return decodeInterviewTurn(content, input.GenerateNextQuestion)
 }
 
-func (adapter *OpenAICompatibleAdapter) GenerateInterviewReport(
+func (adapter *CompatibleLLMAdapter) GenerateInterviewReport(
 	ctx context.Context,
 	input interviewdomain.InterviewReportContext,
 ) (interviewdomain.InterviewReport, error) {
@@ -143,7 +145,7 @@ func (adapter *OpenAICompatibleAdapter) GenerateInterviewReport(
 	return decodeInterviewReport(content)
 }
 
-func (adapter *OpenAICompatibleAdapter) requestJSONCompletion(
+func (adapter *CompatibleLLMAdapter) requestJSONCompletion(
 	ctx context.Context,
 	messages []chatMessage,
 	temperature float64,
@@ -219,7 +221,8 @@ const interviewQuestionSystemPrompt = `你是一名严谨的校招面试官。�
 
 func buildInterviewQuestionPrompt(input interviewdomain.InterviewContext) string {
 	return fmt.Sprintf(
-		"公司：%s\n岗位：%s\n岗位 JD：\n%s\n\n候选人经历摘要：\n%s\n\n候选人技能：%s\n岗位核心要求：%s\n建议准备主题：%s",
+		"面试模式：%s\n公司：%s\n岗位：%s\n岗位 JD：\n%s\n\n候选人经历摘要：\n%s\n\n候选人技能：%s\n岗位核心要求：%s\n建议准备主题：%s",
+		interviewTypeLabel(input.InterviewType()),
 		input.CompanyName(),
 		input.JobTitle(),
 		input.JDContent(),
@@ -228,6 +231,17 @@ func buildInterviewQuestionPrompt(input interviewdomain.InterviewContext) string
 		strings.Join(input.CoreRequirements(), "、"),
 		strings.Join(input.PreparationTopics(), "、"),
 	)
+}
+
+func interviewTypeLabel(value string) string {
+	switch value {
+	case "project":
+		return "项目深挖（持续追问背景、难点、取舍与个人贡献）"
+	case "comprehensive":
+		return "综合面（关注动机、沟通、协作与岗位适配）"
+	default:
+		return "技术面（关注岗位技能、基础知识与解决问题能力）"
+	}
 }
 
 const interviewTurnSystemPrompt = `你是一名严谨的校招面试官。请评价候选人对当前问题的回答，并生成一道自然衔接的下一题。
@@ -258,7 +272,8 @@ const (
 func buildInterviewTurnPrompt(input interviewdomain.InterviewTurnPrompt) string {
 	contextValue := input.Context
 	return fmt.Sprintf(
-		"公司：%s\n岗位：%s\n岗位 JD：\n%s\n\n候选人经历摘要：\n%s\n\n技能：%s\n核心要求：%s\n\n最近对话：\n%s\n当前回答：\n%s",
+		"面试模式：%s\n公司：%s\n岗位：%s\n岗位 JD：\n%s\n\n候选人经历摘要：\n%s\n\n技能：%s\n核心要求：%s\n\n最近对话：\n%s\n当前回答：\n%s",
+		interviewTypeLabel(contextValue.InterviewType()),
 		contextValue.CompanyName(), contextValue.JobTitle(), truncateRunes(contextValue.JDContent(), 4000),
 		truncateRunes(contextValue.ResumeSummary(), 2500), truncateRunes(strings.Join(contextValue.Skills(), "、"), maxInterviewSkillsRunes),
 		truncateRunes(strings.Join(contextValue.CoreRequirements(), "、"), maxInterviewRequirementsRunes),

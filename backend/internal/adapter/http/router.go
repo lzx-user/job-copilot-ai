@@ -8,6 +8,7 @@ import (
 	"job-copilot-backend/internal/adapter/http/handler"
 	"job-copilot-backend/internal/adapter/http/middleware"
 	analysisapp "job-copilot-backend/internal/application/analysis"
+	careerapp "job-copilot-backend/internal/application/career"
 	dashboardapp "job-copilot-backend/internal/application/dashboard"
 	interviewapp "job-copilot-backend/internal/application/interview"
 	"job-copilot-backend/internal/port"
@@ -25,6 +26,7 @@ type Dependencies struct {
 	InterviewHistoryService     *interviewapp.HistoryService
 	AIRateLimit                 int
 	DashboardService            *dashboardapp.Service
+	CareerService               *careerapp.Service
 }
 
 func NewRouter(frontendOrigin string, dependencies Dependencies) *gin.Engine {
@@ -40,6 +42,20 @@ func NewRouter(frontendOrigin string, dependencies Dependencies) *gin.Engine {
 	aiRoutes := apiV1.Group("/ai")
 	aiRoutes.Use(middleware.Authenticate(dependencies.AuthProvider))
 	aiRoutes.GET("/dashboard", handler.NewDashboardHandler(dependencies.DashboardService).Get)
+	careerHandler := handler.NewCareerHandler(dependencies.CareerService)
+	careerRoutes := apiV1.Group("/career")
+	careerRoutes.Use(middleware.Authenticate(dependencies.AuthProvider))
+	careerRoutes.GET("/workspace", careerHandler.GetWorkspace)
+	careerRoutes.POST("/resumes", careerHandler.CreateResume)
+	careerRoutes.POST("/resumes/:id/versions", careerHandler.CreateResumeVersion)
+	careerRoutes.POST("/jobs", careerHandler.CreateJob)
+	careerRoutes.POST("/jobs/:id/jd-versions", careerHandler.CreateJDVersion)
+	careerRoutes.POST("/applications", careerHandler.CreateApplication)
+	careerRoutes.POST("/events", careerHandler.AddEvent)
+	careerRoutes.POST("/interviews", careerHandler.CreateInterview)
+	careerRoutes.PATCH("/interviews/:id", careerHandler.UpdateInterview)
+	careerRoutes.PUT("/retrospectives", careerHandler.SaveRetrospective)
+	careerRoutes.PUT("/offers", careerHandler.SaveOffer)
 	aiRateLimit := middleware.NewUserRateLimiter(dependencies.AIRateLimit, time.Minute).Handle()
 	aiRoutes.POST("/analyze-jd", aiRateLimit, handler.NewAnalyzeJDHandler(dependencies.AnalyzeJDService).Handle)
 	analysisHistoryHandler := handler.NewJDAnalysisHistoryHandler(dependencies.AnalysisHistoryService)

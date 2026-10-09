@@ -16,6 +16,7 @@ type InterviewContext struct {
 	skills            []string
 	coreRequirements  []string
 	preparationTopics []string
+	interviewType     string
 }
 
 type InterviewContextParams struct {
@@ -51,7 +52,17 @@ func NewInterviewContext(params InterviewContextParams) (InterviewContext, error
 		skills:            params.Skills,
 		coreRequirements:  params.CoreRequirements,
 		preparationTopics: params.PreparationTopics,
+		interviewType:     "technical",
 	}, nil
+}
+
+func (context InterviewContext) WithInterviewType(interviewType string) (InterviewContext, error) {
+	interviewType = strings.TrimSpace(interviewType)
+	if interviewType != "technical" && interviewType != "project" && interviewType != "comprehensive" {
+		return InterviewContext{}, ErrInvalidInterviewContext
+	}
+	context.interviewType = interviewType
+	return context, nil
 }
 
 func normalizeContextItems(values []string) []string {
@@ -77,3 +88,4 @@ func (context InterviewContext) CoreRequirements() []string {
 func (context InterviewContext) PreparationTopics() []string {
 	return append([]string(nil), context.preparationTopics...)
 }
+func (context InterviewContext) InterviewType() string { return context.interviewType }
