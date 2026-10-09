@@ -32,11 +32,16 @@
 - Dashboard 的真实 JD 数量、面试数量、最近 7 天记录、最近记录与档案完整度；
 - AI 写接口按认证用户执行单实例固定窗口限流；
 - 五轮状态规则、AI 分析结果校验和限流中间件的基础单元测试。
+- 独立的简历、简历版本、岗位、JD 版本、投递、进展事件、真实面试、复盘和 Offer 数据模型与 RLS；
+- 岗位工作台与岗位详情页，支持从岗位/JD 版本进入 AI 匹配，并串联投递时间线、真实面试复盘和 Offer；
+- 三类模拟面试模式真实进入 Prompt，并可关联投递与当时使用的简历版本；
+- Dashboard 增加真实投递、推进中投递、真实面试、Offer 和转化率聚合，移除固定的虚假计划进度。
 
 尚未真实完成：
 
 - Supabase 真实凭据下的完整认证联调；
 - 新增 migration 在目标 Supabase 项目的远端执行，以及真实账号下的 Profile、JD 历史、面试单轮完整联调；
+- `202610060001_create_career_pipeline.sql` 在目标 Supabase 项目的远端执行，以及岗位、版本、投递、真实面试、复盘、Offer 和结果 Dashboard 的完整联调；
 - 新增 `202609270001_add_history_delete_policies.sql` migration 在目标 Supabase 项目的远端执行；
 - 双账号 RLS、完整五轮面试、历史删除和 Dashboard 的真实环境联调；
 - 公网部署与生产环境端到端验收。
@@ -61,6 +66,7 @@
 │  ├─ cmd/server/main.go             启动入口
 │  ├─ internal/domain/analysis/      JD 分析实体与业务规则
 │  ├─ internal/domain/interview/     模拟面试实体、状态与五轮规则
+│  ├─ internal/domain/career/        求职主线实体
 │  ├─ internal/application/analysis/ JD 分析用例编排
 │  ├─ internal/application/interview/ 模拟面试启动用例编排
 │  ├─ internal/port/                 AI、认证与仓储接口
@@ -144,6 +150,8 @@ JD 历史使用 `GET /api/v1/ai/jd-analyses`、`GET /api/v1/ai/jd-analyses/:id` 
 
 Dashboard 使用 `GET /api/v1/ai/dashboard`，由数据库聚合函数返回精确总数、最近 7 天记录数、档案完整度和最近 5 条记录，不依赖历史列表的分页长度计算。Profile 与 Dashboard 的完整度统一为基础信息、至少 5 个技能、至少 100 字项目摘要、至少 50 字个人优势各 25%；Profile 预览当前表单，Dashboard 统计已保存档案。
 
+求职工作台使用 `/api/v1/career`：`GET /workspace` 一次恢复当前用户的简历、岗位、投递、进展、真实面试、复盘与 Offer；`POST /resumes`、`POST /resumes/:id/versions`、`POST /jobs`、`POST /jobs/:id/jd-versions` 保存可追溯版本；`POST /applications`、`POST /events`、`POST /interviews` 与 `PUT /retrospectives`、`PUT /offers` 推进真实业务链路。所有写入都使用后端鉴权后的用户身份，并由复合外键和 RLS 防止跨账号关联。
+
 健康检查响应：
 
 ```json
@@ -180,14 +188,14 @@ APP_ENV=development
 FRONTEND_ORIGIN=http://localhost:5173
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
-AI_API_BASE_URL=
+AI_API_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 AI_API_KEY=
-AI_MODEL=
+AI_MODEL=deepseek-v4.1-flash
 AI_TIMEOUT_SECONDS=90
 AI_RATE_LIMIT_PER_MINUTE=10
 ```
 
-`AI_API_BASE_URL` 填 OpenAI 兼容 API 的 `/v1` 基础地址，后端会请求 `/chat/completions`。`AI_RATE_LIMIT_PER_MINUTE` 控制单个已认证用户每分钟最多发起的 AI 写请求数，默认 10；当前限流状态保存在单个 Go 实例内，多实例部署时需要由网关或共享存储提供全局限流。当认证或 AI 配置缺失时，健康检查仍可启动，业务接口会返回明确的未配置错误，不会生成假结果。
+当前默认使用阿里云百炼国内接口上的 `deepseek-v4.1-flash`。百炼复用了 Chat Completions 请求格式，但请求不会发送到 OpenAI 官方服务，也不需要 OpenAI Key 或订阅。后端会请求配置地址下的 `/chat/completions`。`AI_RATE_LIMIT_PER_MINUTE` 控制单个已认证用户每分钟最多发起的 AI 写请求数，默认 10；当前限流状态保存在单个 Go 实例内，多实例部署时需要由网关或共享存储提供全局限流。当认证或 AI 配置缺失时，健康检查仍可启动，业务接口会返回明确的未配置错误，不会生成假结果。
 
 真实 `.env` 和 `.env.local` 不提交 Git。Supabase service role key、数据库密码和 AI API Key 只能放后端运行环境，不能放入浏览器代码。
 
